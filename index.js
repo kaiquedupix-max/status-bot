@@ -28,94 +28,48 @@ let statusMessage = null;
 
 async function getRustStatus() {
 
-    let rcon;
-
     try {
 
-        console.log("🔄 Conectando no RCON...");
+        const rcon = await Rcon.connect({
 
+            host: "157.85.89.141",
 
-        rcon = await Rcon.connect({
+            port: 27336,
 
-            host: process.env.RCON_HOST,
+            password: "cd1df9f3f91c",
 
-            port: Number(process.env.RCON_PORT),
-
-            password: process.env.RCON_PASSWORD
+            timeout: 10000
 
         });
 
 
-
-        console.log("✅ RCON conectado");
-
-
-        const response = await rcon.send("playerlist");
+        console.log("✅ CONECTOU NO RCON");
 
 
-        console.log("📡 Resposta Rust:");
+        const response = await rcon.send("serverinfo");
+
+
+        console.log("RESPOSTA SERVER:");
         console.log(response);
-
 
 
         await rcon.end();
 
 
-
-        let players = 0;
-
-
-        try {
-
-            const data = JSON.parse(response);
-
-            players = data.length;
-
-
-        } catch {
-
-            console.log(
-                "⚠️ Não foi possível converter JSON"
-            );
-
-        }
-
-
-
         return {
-
-            online: true,
-
-            players: players
-
+            online:true,
+            players:0
         };
-
 
 
     } catch(error){
 
-
-        console.log("❌ ERRO RCON:");
+        console.log("❌ RCON FALHOU:");
         console.log(error);
 
-
-        if(rcon){
-
-            try {
-
-                await rcon.end();
-
-            } catch {}
-
-        }
-
-
         return {
-
             online:false,
-
             players:0
-
         };
 
     }
