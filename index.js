@@ -9,44 +9,41 @@ const {
 
 const WebSocket = require("ws");
 
+
 const client = new Client({
-    intents: [
+    intents:[
         GatewayIntentBits.Guilds
     ]
 });
 
 
 let statusMessage = null;
-let requestId = 0;
+let identifier = 0;
 
 
 
-// ======================================
-// RUST WEB RCON
-// ======================================
+// ================================
+// WEB RCON RUST
+// ================================
 
 function rustCommand(command){
 
-    return new Promise((resolve, reject)=>{
-
-
-        console.log("🔄 Abrindo Web RCON...");
+    return new Promise((resolve,reject)=>{
 
 
         const ws = new WebSocket(
-            `ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
-        );
 
+            `ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
+
+        );
 
 
         const timeout = setTimeout(()=>{
 
-            console.log("❌ Timeout Web RCON");
-
             ws.close();
 
             reject(
-                new Error("Timeout Web RCON")
+                new Error("Timeout RCON")
             );
 
         },15000);
@@ -56,19 +53,16 @@ function rustCommand(command){
         ws.on("open",()=>{
 
 
-            console.log("✅ Web RCON conectado");
-
-
-            requestId++;
+            identifier++;
 
 
             ws.send(JSON.stringify({
 
-                Identifier: requestId,
+                Identifier:identifier,
 
-                Message: command,
+                Message:command,
 
-                Name:"RustStatusBot"
+                Name:"GuerraFriaBot"
 
             }));
 
@@ -83,19 +77,31 @@ function rustCommand(command){
             clearTimeout(timeout);
 
 
-            const response = data.toString();
+            try{
 
 
-            console.log("📡 Resposta Rust:");
+                const json = JSON.parse(
+                    data.toString()
+                );
 
-            console.log(response);
+
+                resolve(json.Message);
+
+
+
+            }catch{
+
+
+                resolve(
+                    data.toString()
+                );
+
+
+            }
 
 
 
             ws.close();
-
-
-            resolve(response);
 
 
         });
@@ -107,12 +113,6 @@ function rustCommand(command){
 
             clearTimeout(timeout);
 
-
-            console.log("❌ Erro Web RCON:");
-
-            console.log(error);
-
-
             reject(error);
 
 
@@ -121,31 +121,45 @@ function rustCommand(command){
 
     });
 
-
 }
 
 
 
+// ================================
+// STATUS RUST
+// ================================
 
-// ======================================
-// PEGAR PLAYERS
-// ======================================
-
-async function getPlayers(){
+async function getRustInfo(){
 
 
     try{
 
 
         const response = await rustCommand(
-            "playerlist"
+            "serverinfo"
         );
+
 
 
         const data = JSON.parse(response);
 
 
-        return data.length;
+
+        return {
+
+            online:true,
+
+            hostname:data.Hostname,
+
+            players:data.Players,
+
+            maxPlayers:data.MaxPlayers,
+
+            map:data.Map,
+
+            fps:data.Framerate
+
+        };
 
 
 
@@ -153,12 +167,17 @@ async function getPlayers(){
 
 
         console.log(
-            "Erro contando players:",
+            "❌ Erro Rust:",
             error.message
         );
 
 
-        return 0;
+        return {
+
+            online:false
+
+        };
+
 
     }
 
@@ -167,10 +186,9 @@ async function getPlayers(){
 
 
 
-
-// ======================================
-// ATUALIZAR STATUS
-// ======================================
+// ================================
+// ATUALIZA DISCORD
+// ================================
 
 async function updateStatus(){
 
@@ -178,33 +196,15 @@ async function updateStatus(){
     try{
 
 
-        console.log("==============================");
-
-        console.log("🔄 Atualizando status");
-
-
-
         const channel = await client.channels.fetch(
+
             process.env.CHANNEL_ID
+
         );
 
 
 
-        let online = true;
-
-
-        try{
-
-            await rustCommand(
-                "serverinfo"
-            );
-
-
-        }catch{
-
-            online=false;
-
-        }
+        const rust = await getRustInfo();
 
 
 
@@ -212,19 +212,18 @@ async function updateStatus(){
 
 
 
-        if(online){
-
-
-            const players = await getPlayers();
+        if(rust.online){
 
 
 
             client.user.setActivity(
 
-                `${process.env.SERVER_NAME} | ${players}/${process.env.MAX_PLAYERS} jogadores`,
+                `Guerra Fria | ${rust.players}/${rust.maxPlayers} jogadores`,
 
                 {
+
                     type:ActivityType.Playing
+
                 }
 
             );
@@ -239,30 +238,46 @@ async function updateStatus(){
 
             .setDescription(
 `
-🎮 **${process.env.SERVER_NAME}**
+🎮 **${rust.hostname}**
 
 👥 **Jogadores**
-${players}/${process.env.MAX_PLAYERS}
+${rust.players}/${rust.maxPlayers}
+
+🗺️ **Mapa**
+${rust.map}
+
+⚡ **FPS**
+${rust.fps}
 
 🌎 **IP**
 ${process.env.GAME_IP}
 
-⏱ **Atualizado**
+🔄 **Atualização**
 <t:${Math.floor(Date.now()/1000)}:R>
 `
             )
 
-            .setColor("Green");
+            .setColor("Green")
+
+            .setFooter({
+
+                text:"Guerra Fria Status System"
+
+            });
+
 
 
         }else{
 
 
             client.user.setActivity(
+
                 "Servidor offline",
+
                 {
                     type:ActivityType.Playing
                 }
+
             );
 
 
@@ -274,9 +289,9 @@ ${process.env.GAME_IP}
 
             .setDescription(
 `
-🎮 **${process.env.SERVER_NAME}**
+🎮 Guerra Fria 2x
 
-Sem resposta do RCON.
+Servidor sem resposta.
 `
             )
 
@@ -292,9 +307,12 @@ Sem resposta do RCON.
 
             await statusMessage.edit({
 
-                embeds:[embed]
+                embeds:[
+                    embed
+                ]
 
             });
+
 
 
         }else{
@@ -302,7 +320,9 @@ Sem resposta do RCON.
 
             statusMessage = await channel.send({
 
-                embeds:[embed]
+                embeds:[
+                    embed
+                ]
 
             });
 
@@ -311,7 +331,7 @@ Sem resposta do RCON.
 
 
         console.log(
-            "✅ Status enviado"
+            "✅ Status atualizado"
         );
 
 
@@ -319,35 +339,40 @@ Sem resposta do RCON.
 
 
         console.log(
-            "❌ Erro geral:"
+            "❌ Erro Discord:",
+            error.message
         );
-
-        console.log(error);
 
 
     }
+
 
 }
 
 
 
 
+// ================================
+// BOT ONLINE
+// ================================
+
 client.once("clientReady",()=>{
 
 
     console.log(
-        `🤖 Bot conectado: ${client.user.tag}`
+        `🤖 Online: ${client.user.tag}`
     );
 
 
     updateStatus();
 
 
+
     setInterval(
 
         updateStatus,
 
-        300000
+        60000
 
     );
 
