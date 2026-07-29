@@ -7,16 +7,16 @@ const {
     ActivityType
 } = require("discord.js");
 
-const Rcon = require("rcon");
+const { Rcon } = require("rcon-client");
 
 
-// ==========================
-// DISCORD
-// ==========================
+// =============================
+// DISCORD CLIENT
+// =============================
 
 const client = new Client({
 
-    intents:[
+    intents: [
         GatewayIntentBits.Guilds
     ]
 
@@ -26,291 +26,252 @@ const client = new Client({
 let statusMessage = null;
 
 
-// ==========================
-// RCON RUST
-// ==========================
 
-function connectRust(){
+// =============================
+// CONECTAR NO RUST RCON
+// =============================
 
-
-    return new Promise((resolve)=>{
+async function connectRust(){
 
 
-        console.log("🔄 Iniciando conexão RCON...");
+    let rcon;
 
 
-        const rcon = new Rcon(
+    try {
 
-            process.env.RCON_HOST,
 
-            Number(process.env.RCON_PORT),
+        console.log("🔄 Tentando conectar no RCON...");
 
-            process.env.RCON_PASSWORD
 
+        rcon = await Rcon.connect({
+
+            host: process.env.RCON_HOST,
+
+            port: Number(process.env.RCON_PORT),
+
+            password: process.env.RCON_PASSWORD,
+
+            timeout: 15000
+
+        });
+
+
+
+        console.log("✅ RCON conectado!");
+
+
+
+        const response = await rcon.send(
+            "serverinfo"
         );
 
 
+        console.log("📡 SERVER INFO RECEBIDO:");
 
-        let finished = false;
+        console.log(response);
 
 
 
-        rcon.on("auth",()=>{
+        await rcon.end();
 
 
-            console.log("✅ RCON autenticado com sucesso");
 
+        return {
 
-            rcon.send("serverinfo");
+            online:true,
 
+            response:response
 
-        });
+        };
 
 
 
-        rcon.on("response",(response)=>{
+    } catch(error){
 
 
-            console.log("📡 Resposta do Rust:");
+        console.log("❌ ERRO AO CONECTAR RCON:");
 
-            console.log(response);
+        console.log(error.message);
 
 
 
-            if(!finished){
-
-                finished = true;
-
-
-                rcon.disconnect();
-
-
-
-                resolve({
-
-                    online:true,
-
-                    response:response
-
-                });
-
-            }
-
-
-        });
-
-
-
-        rcon.on("error",(error)=>{
-
-
-            console.log("❌ Erro RCON:");
-
-            console.log(error);
-
-
-
-            if(!finished){
-
-                finished=true;
-
-
-                resolve({
-
-                    online:false
-
-                });
-
-            }
-
-
-        });
-
-
-
-        rcon.on("end",()=>{
-
-
-            console.log("🔌 RCON desconectado");
-
-
-        });
-
-
-
-        rcon.connect();
-
-
-
-    });
-
-}
-
-
-
-// ==========================
-// CONTAR PLAYERS
-// ==========================
-
-async function getPlayers(){
-
-
-    return new Promise((resolve)=>{
-
-
-        const rcon = new Rcon(
-
-            process.env.RCON_HOST,
-
-            Number(process.env.RCON_PORT),
-
-            process.env.RCON_PASSWORD
-
-        );
-
-
-
-        rcon.on("auth",()=>{
-
-
-            console.log("👥 Buscando jogadores...");
-
-
-            rcon.send("playerlist");
-
-
-        });
-
-
-
-        rcon.on("response",(response)=>{
-
-
-            console.log("📋 PLAYERLIST:");
-
-            console.log(response);
-
-
+        if(rcon){
 
             try{
 
+                await rcon.end();
 
-                const players = JSON.parse(response);
+            }catch{}
 
-
-                resolve(players.length);
-
-
-
-            }catch{
-
-
-                resolve(0);
-
-            }
+        }
 
 
 
-            rcon.disconnect();
+        return {
 
+            online:false
 
-
-        });
-
-
-
-        rcon.on("error",(error)=>{
-
-
-            console.log("❌ Erro playerlist:");
-
-            console.log(error);
-
-
-            resolve(0);
-
-
-        });
-
-
-
-        rcon.connect();
-
-
-    });
-
-
-}
-
-
-
-// ==========================
-// ATUALIZAR DISCORD
-// ==========================
-
-
-async function updateStatus(){
-
-
-    console.log("==============================");
-
-    console.log("🔄 Atualizando status");
-
-
-
-    const channel = await client.channels.fetch(
-
-        process.env.CHANNEL_ID
-
-    );
-
-
-
-    const connection = await connectRust();
-
-
-
-    let players = 0;
-
-
-
-    if(connection.online){
-
-
-        players = await getPlayers();
+        };
 
 
     }
 
 
-
-    let embed;
-
-
-
-    if(connection.online){
+}
 
 
 
-        client.user.setActivity(
 
-            `${process.env.SERVER_NAME} | ${players}/${process.env.MAX_PLAYERS} jogadores`,
+// =============================
+// PEGAR JOGADORES ONLINE
+// =============================
 
-            {
+async function getPlayers(){
 
-                type:ActivityType.Playing
 
-            }
+    let rcon;
+
+
+    try{
+
+
+        console.log("👥 Consultando players...");
+
+
+        rcon = await Rcon.connect({
+
+            host: process.env.RCON_HOST,
+
+            port: Number(process.env.RCON_PORT),
+
+            password: process.env.RCON_PASSWORD,
+
+            timeout:15000
+
+        });
+
+
+
+        const response = await rcon.send(
+            "playerlist"
+        );
+
+
+        console.log("📋 PLAYERLIST:");
+
+        console.log(response);
+
+
+
+        await rcon.end();
+
+
+
+        const players = JSON.parse(response);
+
+
+
+        return players.length;
+
+
+
+    }catch(error){
+
+
+        console.log(
+            "❌ Erro buscando jogadores:"
+        );
+
+        console.log(error.message);
+
+
+
+        if(rcon){
+
+            try{
+
+                await rcon.end();
+
+            }catch{}
+
+        }
+
+
+        return 0;
+
+
+    }
+
+
+}
+
+
+
+
+// =============================
+// ATUALIZAR STATUS
+// =============================
+
+async function updateStatus(){
+
+
+    try{
+
+
+        console.log("==============================");
+
+        console.log("🔄 Atualizando painel...");
+
+
+
+        const channel = await client.channels.fetch(
+
+            process.env.CHANNEL_ID
 
         );
 
 
 
-        embed = new EmbedBuilder()
+        const rust = await connectRust();
 
-        .setTitle("🟢 SERVIDOR ONLINE")
 
-        .setDescription(
+
+        let embed;
+
+
+
+        let players = 0;
+
+
+
+        if(rust.online){
+
+
+            players = await getPlayers();
+
+
+
+            client.user.setActivity(
+
+                `${process.env.SERVER_NAME} | ${players}/${process.env.MAX_PLAYERS} jogadores`,
+
+                {
+
+                    type: ActivityType.Playing
+
+                }
+
+            );
+
+
+
+            embed = new EmbedBuilder()
+
+            .setTitle(
+                "🟢 SERVIDOR ONLINE"
+            )
+
+            .setDescription(
 `
 🎮 **${process.env.SERVER_NAME}**
 
@@ -323,97 +284,125 @@ ${process.env.GAME_IP}
 ⏱ **Atualizado:**
 <t:${Math.floor(Date.now()/1000)}:R>
 `
-        )
+            )
 
-        .setColor("Green")
+            .setColor("Green")
 
-        .setFooter({
+            .setFooter({
 
-            text:"Guerra Fria Status System"
+                text:"Guerra Fria 2x • Monitor"
 
-        });
-
-
-
-    }else{
+            });
 
 
-        client.user.setActivity(
 
-            "Servidor offline",
+        }else{
 
-            {
 
-                type:ActivityType.Playing
+            client.user.setActivity(
 
-            }
+                "Servidor offline",
 
+                {
+
+                    type:ActivityType.Playing
+
+                }
+
+            );
+
+
+
+            embed = new EmbedBuilder()
+
+            .setTitle(
+                "🔴 SERVIDOR OFFLINE"
+            )
+
+            .setDescription(
+`
+🎮 **${process.env.SERVER_NAME}**
+
+Não foi possível conectar ao RCON.
+
+🔄 Nova tentativa em breve...
+`
+            )
+
+            .setColor("Red");
+
+
+
+        }
+
+
+
+
+        if(statusMessage){
+
+
+            await statusMessage.edit({
+
+                embeds:[
+                    embed
+                ]
+
+            });
+
+
+        }else{
+
+
+            statusMessage = await channel.send({
+
+                embeds:[
+                    embed
+                ]
+
+            });
+
+
+        }
+
+
+
+        console.log(
+            "✅ Painel atualizado!"
         );
 
 
 
-        embed = new EmbedBuilder()
+    }catch(error){
 
-        .setTitle("🔴 SERVIDOR OFFLINE")
 
-        .setDescription(
-`
-🎮 **${process.env.SERVER_NAME}**
+        console.log(
+            "❌ Erro atualizando Discord:"
+        );
 
-Não foi possível conectar no RCON.
-
-🔄 Tentando novamente...
-`
-        )
-
-        .setColor("Red");
+        console.log(error);
 
 
     }
 
-
-
-    if(statusMessage){
-
-
-        await statusMessage.edit({
-
-            embeds:[embed]
-
-        });
-
-
-    }else{
-
-
-        statusMessage = await channel.send({
-
-            embeds:[embed]
-
-        });
-
-
-    }
-
-
-
-    console.log("✅ Embed atualizado");
 
 }
 
 
 
-// ==========================
-// BOT READY
-// ==========================
 
+// =============================
+// BOT ONLINE
+// =============================
 
-client.once("clientReady",()=>{
+client.once(
+"clientReady",
+()=>{
 
 
     console.log(
         `🤖 Bot conectado: ${client.user.tag}`
     );
+
 
 
     updateStatus();
@@ -433,9 +422,10 @@ client.once("clientReady",()=>{
 
 
 
-// ==========================
+
+// =============================
 // LOGIN
-// ==========================
+// =============================
 
 client.login(
 
