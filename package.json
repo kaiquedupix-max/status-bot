@@ -1,7 +1,7 @@
 {
   "name": "guerra-fria-status-bot",
   "version": "1.0.0",
-  "description": "Bot Discord monitor Rust RCON",
+  "description": "Bot Discord Rust Status",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,6 +9,6 @@
   "dependencies": {
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
-    "rcon-client": "^4.2.5"
+    "rust-rcon": "^1.0.0"
   }
 }
