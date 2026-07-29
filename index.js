@@ -1,350 +1,186 @@
 require("dotenv").config();
 
+
 const {
-    Client,
-    GatewayIntentBits,
-    EmbedBuilder,
-    ActivityType
+
+Client,
+
+GatewayIntentBits,
+
+EmbedBuilder
+
 } = require("discord.js");
 
-const WebSocket = require("ws");
+
+
+const {
+
+execute,
+
+handleSelect
+
+} = require("./commands");
+
+
+
+const {
+
+getServerInfo
+
+} = require("./rcon");
+
+
+
 
 
 const client = new Client({
+
     intents:[
+
         GatewayIntentBits.Guilds
+
     ]
+
 });
 
 
+
+
 let statusMessage = null;
-let identifier = 0;
 
 
 
-// ================================
-// WEB RCON RUST
-// ================================
 
-function rustCommand(command){
+// =====================================
+// STATUS DO SERVIDOR
+// =====================================
 
-    return new Promise((resolve,reject)=>{
-
-
-        const ws = new WebSocket(
-
-            `ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
-
-        );
-
-
-        const timeout = setTimeout(()=>{
-
-            ws.close();
-
-            reject(
-                new Error("Timeout RCON")
-            );
-
-        },15000);
-
-
-
-        ws.on("open",()=>{
-
-
-            identifier++;
-
-
-            ws.send(JSON.stringify({
-
-                Identifier:identifier,
-
-                Message:command,
-
-                Name:"GuerraFriaBot"
-
-            }));
-
-
-        });
-
-
-
-        ws.on("message",(data)=>{
-
-
-            clearTimeout(timeout);
-
-
-            try{
-
-
-                const json = JSON.parse(
-                    data.toString()
-                );
-
-
-                resolve(json.Message);
-
-
-
-            }catch{
-
-
-                resolve(
-                    data.toString()
-                );
-
-
-            }
-
-
-
-            ws.close();
-
-
-        });
-
-
-
-        ws.on("error",(error)=>{
-
-
-            clearTimeout(timeout);
-
-            reject(error);
-
-
-        });
-
-
-    });
-
-}
-
-
-
-// ================================
-// STATUS RUST
-// ================================
-
-async function getRustInfo(){
-
-
-    try{
-
-
-        const response = await rustCommand(
-            "serverinfo"
-        );
-
-
-
-        const data = JSON.parse(response);
-
-
-
-        return {
-
-            online:true,
-
-            hostname:data.Hostname,
-
-            players:data.Players,
-
-            maxPlayers:data.MaxPlayers,
-
-            map:data.Map,
-
-            fps:data.Framerate
-
-        };
-
-
-
-    }catch(error){
-
-
-        console.log(
-            "❌ Erro Rust:",
-            error.message
-        );
-
-
-        return {
-
-            online:false
-
-        };
-
-
-    }
-
-
-}
-
-
-
-// ================================
-// ATUALIZA DISCORD
-// ================================
 
 async function updateStatus(){
 
 
-    try{
+try{
 
 
-        const channel = await client.channels.fetch(
+const channel = await client.channels.fetch(
 
-            process.env.CHANNEL_ID
+process.env.CHANNEL_ID
 
-        );
-
-
-
-        const rust = await getRustInfo();
+);
 
 
 
-        let embed;
+const rust = await getServerInfo();
 
 
 
-        if(rust.online){
+const embed = new EmbedBuilder()
 
 
+.setTitle(
 
-            client.user.setActivity(
+"🟢 SERVIDOR ONLINE"
 
-                `Guerra Fria | ${rust.players}/${rust.maxPlayers} jogadores`,
-
-                {
-
-                    type:ActivityType.Playing
-
-                }
-
-            );
+)
 
 
+.setDescription(
 
-            embed = new EmbedBuilder()
-
-            .setTitle(
-                "🟢 SERVIDOR ONLINE"
-            )
-
-            .setDescription(
 `
-🎮 **${rust.hostname}**
+🎮 **${rust.Hostname}**
 
 👥 **Jogadores**
-${rust.players}/${rust.maxPlayers}
+
+${rust.Players}/${rust.MaxPlayers}
+
 
 🗺️ **Mapa**
-${rust.map}
+
+${rust.Map}
+
 
 ⚡ **FPS**
-${rust.fps}
+
+${rust.Framerate}
+
 
 🌎 **IP**
+
 ${process.env.GAME_IP}
 
-🔄 **Atualização**
+
+🔄 Atualizado:
+
 <t:${Math.floor(Date.now()/1000)}:R>
+
 `
-            )
 
-            .setColor("Green")
-
-            .setFooter({
-
-                text:"Guerra Fria Status System"
-
-            });
+)
 
 
+.setColor(
 
-        }else{
+"Green"
 
-
-            client.user.setActivity(
-
-                "Servidor offline",
-
-                {
-                    type:ActivityType.Playing
-                }
-
-            );
-
-
-            embed = new EmbedBuilder()
-
-            .setTitle(
-                "🔴 SERVIDOR OFFLINE"
-            )
-
-            .setDescription(
-`
-🎮 Guerra Fria 2x
-
-Servidor sem resposta.
-`
-            )
-
-            .setColor("Red");
-
-
-        }
+);
 
 
 
-        if(statusMessage){
 
+client.user.setActivity(
 
-            await statusMessage.edit({
+`Guerra Fria | ${rust.Players}/${rust.MaxPlayers} jogadores`
 
-                embeds:[
-                    embed
-                ]
-
-            });
+);
 
 
 
-        }else{
+
+if(statusMessage){
 
 
-            statusMessage = await channel.send({
+await statusMessage.edit({
 
-                embeds:[
-                    embed
-                ]
+embeds:[embed]
 
-            });
+});
 
 
-        }
+}else{
 
 
-        console.log(
-            "✅ Status atualizado"
-        );
+statusMessage = await channel.send({
+
+embeds:[embed]
+
+});
 
 
-    }catch(error){
+}
 
 
-        console.log(
-            "❌ Erro Discord:",
-            error.message
-        );
+
+console.log(
+
+"✅ Status atualizado"
+
+);
 
 
-    }
+
+}catch(error){
+
+
+console.log(
+
+"❌ Erro status:",
+error.message
+
+);
+
+
+}
+
 
 
 }
@@ -352,35 +188,175 @@ Servidor sem resposta.
 
 
 
-// ================================
-// BOT ONLINE
-// ================================
-
-client.once("clientReady",()=>{
 
 
-    console.log(
-        `🤖 Online: ${client.user.tag}`
-    );
+// =====================================
+// BANFEED
+// =====================================
+
+async function sendBanLog(data){
 
 
-    updateStatus();
+const channel = await client.channels.fetch(
+
+process.env.BANFEED_CHANNEL_ID
+
+);
 
 
 
-    setInterval(
+const embed = new EmbedBuilder()
 
-        updateStatus,
 
-        60000
+.setTitle(
 
-    );
+"🔨 NOVO BANIMENTO"
 
+)
+
+
+.setDescription(
+
+data
+
+)
+
+
+.setColor(
+
+"Red"
+
+);
+
+
+
+channel.send({
+
+embeds:[embed]
 
 });
 
 
 
+}
+
+
+
+
+
+
+// =====================================
+// BOT ONLINE
+// =====================================
+
+
+client.once(
+
+"clientReady",
+
+()=>{
+
+
+console.log(
+
+`🤖 Bot conectado: ${client.user.tag}`
+
+);
+
+
+
+updateStatus();
+
+
+
+setInterval(
+
+updateStatus,
+
+60000
+
+);
+
+
+
+}
+
+);
+
+
+
+
+
+
+// =====================================
+// SLASH COMMANDS
+// =====================================
+
+
+client.on(
+
+"interactionCreate",
+
+async interaction=>{
+
+
+
+try{
+
+
+
+if(interaction.isChatInputCommand()){
+
+
+await execute(interaction);
+
+
+}
+
+
+
+
+
+if(interaction.isStringSelectMenu()){
+
+
+await handleSelect(interaction);
+
+
+
+}
+
+
+
+}catch(error){
+
+
+
+console.log(
+
+"Erro comando:",
+error
+
+);
+
+
+
+}
+
+
+
+}
+
+);
+
+
+
+
+
+
+
 client.login(
-    process.env.DISCORD_TOKEN
+
+process.env.DISCORD_TOKEN
+
 );
