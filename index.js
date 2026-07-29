@@ -1,60 +1,42 @@
 require("dotenv").config();
 
-
 const {
-
-Client,
-
-GatewayIntentBits,
-
-EmbedBuilder
-
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder
 } = require("discord.js");
 
 
-
 const {
-
-execute,
-
-handleSelect
-
+    execute,
+    handleSelect,
+    handleModal
 } = require("./commands");
 
 
-
 const {
-
-getServerInfo
-
+    getServerInfo
 } = require("./rcon");
-
-
 
 
 
 const client = new Client({
 
     intents:[
-
         GatewayIntentBits.Guilds
-
     ]
 
 });
 
 
 
-
-let statusMessage = null;
-
+let statusMessage;
 
 
 
 // =====================================
-// STATUS DO SERVIDOR
+// ATUALIZAR STATUS
 // =====================================
-
 
 async function updateStatus(){
 
@@ -63,9 +45,7 @@ try{
 
 
 const channel = await client.channels.fetch(
-
-process.env.CHANNEL_ID
-
+    process.env.CHANNEL_ID
 );
 
 
@@ -74,62 +54,52 @@ const rust = await getServerInfo();
 
 
 
+const players =
+rust.Players ?? 0;
+
+
+
+const max =
+rust.MaxPlayers ?? 125;
+
+
+
 const embed = new EmbedBuilder()
 
 
 .setTitle(
-
 "🟢 SERVIDOR ONLINE"
-
 )
 
 
 .setDescription(
 
 `
-🎮 **${rust.Hostname}**
+🎮 **${process.env.SERVER_NAME}**
 
-👥 **Jogadores**
+👥 **Players:** ${players}/${max}
 
-${rust.Players}/${rust.MaxPlayers}
+🗺️ **Mapa:** ${rust.Map}
 
+⚡ **FPS:** ${Math.round(rust.Framerate)}
 
-🗺️ **Mapa**
+🌎 **IP:** ${process.env.GAME_IP}
 
-${rust.Map}
-
-
-⚡ **FPS**
-
-${rust.Framerate}
-
-
-🌎 **IP**
-
-${process.env.GAME_IP}
-
-
-🔄 Atualizado:
-
-<t:${Math.floor(Date.now()/1000)}:R>
-
+🔄 Atualizado: <t:${Math.floor(Date.now()/1000)}:R>
 `
 
 )
 
 
-.setColor(
+.setColor("Green");
 
-"Green"
-
-);
 
 
 
 
 client.user.setActivity(
 
-`Guerra Fria | ${rust.Players}/${rust.MaxPlayers} jogadores`
+`Guerra Fria 2x | ${players}/${max} jogadores`
 
 );
 
@@ -160,10 +130,9 @@ embeds:[embed]
 
 
 
+
 console.log(
-
 "✅ Status atualizado"
-
 );
 
 
@@ -172,69 +141,12 @@ console.log(
 
 
 console.log(
-
 "❌ Erro status:",
 error.message
-
 );
 
 
 }
-
-
-
-}
-
-
-
-
-
-
-// =====================================
-// BANFEED
-// =====================================
-
-async function sendBanLog(data){
-
-
-const channel = await client.channels.fetch(
-
-process.env.BANFEED_CHANNEL_ID
-
-);
-
-
-
-const embed = new EmbedBuilder()
-
-
-.setTitle(
-
-"🔨 NOVO BANIMENTO"
-
-)
-
-
-.setDescription(
-
-data
-
-)
-
-
-.setColor(
-
-"Red"
-
-);
-
-
-
-channel.send({
-
-embeds:[embed]
-
-});
 
 
 
@@ -251,16 +163,13 @@ embeds:[embed]
 
 
 client.once(
-
 "clientReady",
 
 ()=>{
 
 
 console.log(
-
 `🤖 Bot conectado: ${client.user.tag}`
-
 );
 
 
@@ -279,9 +188,8 @@ updateStatus,
 
 
 
-}
+});
 
-);
 
 
 
@@ -289,7 +197,7 @@ updateStatus,
 
 
 // =====================================
-// SLASH COMMANDS
+// INTERAÇÕES
 // =====================================
 
 
@@ -300,10 +208,10 @@ client.on(
 async interaction=>{
 
 
-
 try{
 
 
+// Slash Commands
 
 if(interaction.isChatInputCommand()){
 
@@ -316,12 +224,25 @@ await execute(interaction);
 
 
 
+// Menu jogador
 
 if(interaction.isStringSelectMenu()){
 
 
 await handleSelect(interaction);
 
+
+}
+
+
+
+
+// Modal motivo
+
+if(interaction.isModalSubmit()){
+
+
+await handleModal(interaction);
 
 
 }
@@ -333,22 +254,31 @@ await handleSelect(interaction);
 
 
 console.log(
-
-"Erro comando:",
+"❌ Erro interação:",
 error
-
 );
 
+
+
+if(!interaction.replied){
+
+interaction.reply({
+
+content:
+"❌ Ocorreu um erro.",
+
+ephemeral:true
+
+});
+
+}
 
 
 }
 
 
 
-}
-
-);
-
+});
 
 
 
