@@ -10,6 +10,7 @@ const {
 const { Rcon } = require("rcon-client");
 
 
+// Discord Client
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds
@@ -17,91 +18,194 @@ const client = new Client({
 });
 
 
-let statusMessage;
+let statusMessage = null;
 
 
-async function getRustPlayers() {
+
+// ===============================
+// CONEXÃO RCON RUST
+// ===============================
+
+async function getRustStatus() {
+
+    let rcon;
 
     try {
 
-        const rcon = await Rcon.connect({
+        console.log("🔄 Conectando no RCON...");
+
+
+        rcon = await Rcon.connect({
+
             host: process.env.RCON_HOST,
+
             port: Number(process.env.RCON_PORT),
+
             password: process.env.RCON_PASSWORD
+
         });
+
+
+
+        console.log("✅ RCON conectado");
 
 
         const response = await rcon.send("playerlist");
 
 
+        console.log("📡 Resposta Rust:");
+        console.log(response);
+
+
+
         await rcon.end();
 
 
-        const players = response
-            .split("\n")
-            .filter(line => line.includes("steamid"));
+
+        let players = 0;
 
 
-        return players.length;
+        try {
+
+            const data = JSON.parse(response);
+
+            players = data.length;
 
 
-    } catch (error) {
+        } catch {
 
-        console.log("Erro RCON:", error.message);
+            console.log(
+                "⚠️ Não foi possível converter JSON"
+            );
 
-        return null;
+        }
+
+
+
+        return {
+
+            online: true,
+
+            players: players
+
+        };
+
+
+
+    } catch(error){
+
+
+        console.log("❌ ERRO RCON:");
+        console.log(error);
+
+
+        if(rcon){
+
+            try {
+
+                await rcon.end();
+
+            } catch {}
+
+        }
+
+
+        return {
+
+            online:false,
+
+            players:0
+
+        };
+
     }
+
 }
 
 
 
+
+// ===============================
+// ATUALIZA STATUS
+// ===============================
+
 async function updateStatus(){
 
 
-    const channel = await client.channels.fetch(
-        process.env.CHANNEL_ID
-    );
+    try {
 
 
-    const players = await getRustPlayers();
-
-
-    if(players === null){
-
-
-        client.user.setActivity(
-            "Servidor offline",
-            {
-                type: ActivityType.Playing
-            }
+        const channel = await client.channels.fetch(
+            process.env.CHANNEL_ID
         );
 
 
-        return;
-
-    }
+        const rust = await getRustStatus();
 
 
 
-    client.user.setActivity(
-        `${process.env.SERVER_NAME} | ${players}/${process.env.MAX_PLAYERS} jogadores`,
-        {
-            type: ActivityType.Playing
-        }
-    );
+        let embed;
 
 
 
-    const embed = new EmbedBuilder()
+        if(!rust.online){
 
-    .setTitle("🟢 SERVIDOR ONLINE")
 
-    .setDescription(
+            client.user.setActivity(
+                "Servidor offline",
+                {
+                    type: ActivityType.Playing
+                }
+            );
+
+
+
+            embed = new EmbedBuilder()
+
+            .setTitle("🔴 SERVIDOR OFFLINE")
+
+            .setDescription(
+`
+🎮 **${process.env.SERVER_NAME}**
+
+O servidor não respondeu ao RCON.
+
+🔄 Tentando reconectar...
+`
+            )
+
+            .setColor("Red")
+
+            .setTimestamp();
+
+
+
+        } else {
+
+
+
+            client.user.setActivity(
+
+                `${process.env.SERVER_NAME} | ${rust.players}/${process.env.MAX_PLAYERS} jogadores`,
+
+                {
+                    type: ActivityType.Playing
+                }
+
+            );
+
+
+
+            embed = new EmbedBuilder()
+
+            .setTitle("🟢 SERVIDOR ONLINE")
+
+            .setDescription(
 `
 🎮 **${process.env.SERVER_NAME}**
 
 👥 **Jogadores:**
-${players}/${process.env.MAX_PLAYERS}
+${rust.players}/${process.env.MAX_PLAYERS}
 
 🌎 **IP:**
 ${process.env.GAME_IP}
@@ -109,28 +213,59 @@ ${process.env.GAME_IP}
 ⏱ **Atualizado:**
 <t:${Math.floor(Date.now()/1000)}:R>
 `
-)
+            )
 
-.setColor("Green")
+            .setColor("Green")
 
-.setFooter({
-text:"Sistema de monitoramento Rust"
-});
+            .setFooter({
 
+                text:"Rust Monitor System"
 
+            })
 
-    if(!statusMessage){
+            .setTimestamp();
 
-        statusMessage = await channel.send({
-            embeds:[embed]
-        });
-
-    }else{
+        }
 
 
-        await statusMessage.edit({
-            embeds:[embed]
-        });
+
+        if(statusMessage){
+
+
+            await statusMessage.edit({
+
+                embeds:[embed]
+
+            });
+
+
+        } else {
+
+
+            statusMessage = await channel.send({
+
+                embeds:[embed]
+
+            });
+
+
+        }
+
+
+
+        console.log(
+            "✅ Status atualizado"
+        );
+
+
+
+    } catch(error){
+
+        console.log(
+            "Erro atualizando Discord:"
+        );
+
+        console.log(error);
 
     }
 
@@ -138,22 +273,36 @@ text:"Sistema de monitoramento Rust"
 
 
 
+
+
+// ===============================
+// BOT ONLINE
+// ===============================
+
 client.once("ready",()=>{
 
+
     console.log(
-        `Bot online: ${client.user.tag}`
+        `🤖 Bot conectado: ${client.user.tag}`
     );
 
 
     updateStatus();
 
 
+
     setInterval(
+
         updateStatus,
+
         300000
+
     );
 
+
 });
+
+
 
 
 
