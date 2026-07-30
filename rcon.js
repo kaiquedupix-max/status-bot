@@ -1,9 +1,11 @@
 const WebSocket = require("ws");
 
+
 let identifier = 0;
 
 
-function debugLog(...args){
+
+function debug(...args){
 
     if(process.env.DEBUG_RCON === "true"){
 
@@ -19,68 +21,65 @@ function debugLog(...args){
 
 function rconCommand(command){
 
-    return new Promise((resolve,reject)=>{
 
+return new Promise((resolve,reject)=>{
 
-        debugLog(
-            "📡 RCON ENVIANDO:",
-            command
-        );
 
+debug(
+"📡 RCON:",
+command
+);
 
 
-        const ws = new WebSocket(
 
-            `ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
+const ws = new WebSocket(
 
-        );
+`ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
 
+);
 
 
-        const timeout = setTimeout(()=>{
 
+const timeout = setTimeout(()=>{
 
-            ws.close();
 
+ws.close();
 
-            reject(
-                new Error("RCON Timeout")
-            );
 
+reject(
+new Error("RCON timeout")
+);
 
-        },15000);
 
+},15000);
 
 
 
 
 
-        ws.on("open",()=>{
 
 
-            debugLog(
-                "✅ RCON CONECTADO"
-            );
+ws.on("open",()=>{
 
 
+identifier++;
 
-            identifier++;
 
 
+ws.send(JSON.stringify({
 
-            ws.send(JSON.stringify({
+Identifier:identifier,
 
-                Identifier: identifier,
+Message:command,
 
-                Message: command,
+Name:"GuerraFriaAdmin"
 
-                Name:"GuerraFriaAdmin"
+}));
 
-            }));
 
 
+});
 
-        });
 
 
 
@@ -88,113 +87,93 @@ function rconCommand(command){
 
 
 
-        ws.on("message",(data)=>{
+ws.on("message",(data)=>{
 
 
-            clearTimeout(timeout);
+clearTimeout(timeout);
 
 
 
-            try{
+try{
 
 
-                const response = JSON.parse(
+const response = JSON.parse(
 
-                    data.toString()
+data.toString()
 
-                );
+);
 
 
 
-                debugLog(
+debug(
+"RCON RESPONSE:",
+response.Message
+);
 
-                    "📥 RCON RESPOSTA:",
 
-                    response.Message
 
-                );
+resolve(
 
+response.Message
 
+);
 
-                resolve(
 
-                    response.Message
 
-                );
+}catch{
 
 
+resolve(
 
-            }catch(error){
+data.toString()
 
+);
 
 
-                resolve(
+}
 
-                    data.toString()
 
-                );
 
+ws.close();
 
-            }
 
 
+});
 
-            ws.close();
 
 
 
-        });
 
 
 
 
+ws.on("error",(error)=>{
 
 
+clearTimeout(timeout);
 
-        ws.on("error",(error)=>{
 
 
-            clearTimeout(timeout);
+console.log(
 
+"❌ RCON erro:",
 
+error.message
 
-            console.log(
+);
 
-                "❌ Erro RCON:",
 
-                error.message
 
-            );
+reject(error);
 
 
 
-            reject(error);
+});
 
 
 
-        });
+});
 
-
-
-
-
-
-
-        ws.on("close",()=>{
-
-
-            debugLog(
-
-                "🔌 RCON DESCONECTADO"
-
-            );
-
-
-        });
-
-
-
-    });
 
 
 }
@@ -207,45 +186,45 @@ function rconCommand(command){
 
 
 
-// ==========================
-// LISTAR PLAYERS
-// ==========================
+// ===========================
+// PLAYERS
+// ===========================
 
 
 async function getPlayers(){
 
 
-    try{
+try{
 
 
-        const response = await rconCommand(
+const result = await rconCommand(
 
-            "playerlist"
+"playerlist"
 
-        );
-
-
-
-        return JSON.parse(response);
+);
 
 
 
-    }catch(error){
+return JSON.parse(result);
 
 
-        console.log(
 
-            "❌ Erro playerlist:",
-
-            error.message
-
-        );
+}catch(error){
 
 
-        return [];
+console.log(
+
+"Erro playerlist:",
+
+error.message
+
+);
 
 
-    }
+
+return [];
+
+}
 
 
 }
@@ -258,55 +237,57 @@ async function getPlayers(){
 
 
 
-// ==========================
-// INFO SERVIDOR
-// ==========================
+// ===========================
+// SERVER INFO
+// ===========================
 
 
 async function getServerInfo(){
 
 
-    try{
+try{
 
 
-        const response = await rconCommand(
+const result = await rconCommand(
 
-            "serverinfo"
+"serverinfo"
 
-        );
-
-
-
-        return JSON.parse(response);
+);
 
 
 
-    }catch(error){
+return JSON.parse(result);
 
 
-        console.log(
 
-            "❌ Erro serverinfo:",
-
-            error.message
-
-        );
+}catch(error){
 
 
-        return {
+console.log(
 
-            Players:0,
+"Erro serverinfo:",
 
-            MaxPlayers:125,
+error.message
 
-            Map:"Desconhecido",
-
-            Framerate:0
-
-        };
+);
 
 
-    }
+
+return {
+
+Players:0,
+
+MaxPlayers:125,
+
+Map:"",
+
+Framerate:0
+
+};
+
+
+}
+
 
 
 }
@@ -319,39 +300,40 @@ async function getServerInfo(){
 
 
 
-// ==========================
-// BAN PERMANENTE
-// ==========================
+// ===========================
+// BAN
+// ===========================
 
 
 async function banPlayer(
 
-    steamid,
+steamid,
 
-    name,
+name,
 
-    reason
+reason
 
 ){
 
 
-    const motivo =
+const motivo =
 
-    reason?.trim()
+reason?.trim()
 
-    ||
+||
 
-    "Sem motivo informado";
-
-
+"Sem motivo informado";
 
 
 
-    return await rconCommand(
 
-        `banid "${steamid}" "${name}" "${motivo}"`
 
-    );
+return await rconCommand(
+
+`banid "${steamid}" "${name}" "${motivo}"`
+
+);
+
 
 
 }
@@ -364,41 +346,42 @@ async function banPlayer(
 
 
 
-// ==========================
-// BAN TEMPORÁRIO
-// ==========================
+// ===========================
+// BAN TEMPORARIO
+// ===========================
 
 
 async function tempBanPlayer(
 
-    steamid,
+steamid,
 
-    name,
+name,
 
-    reason,
+reason,
 
-    duration
+tempo
 
 ){
 
 
-    const motivo =
+const motivo =
 
-    reason?.trim()
+reason?.trim()
 
-    ||
+||
 
-    "Sem motivo informado";
-
-
+"Sem motivo informado";
 
 
 
-    return await rconCommand(
 
-        `banid "${steamid}" "${name}" "${motivo}" "${duration}"`
 
-    );
+return await rconCommand(
+
+`banid "${steamid}" "${name}" "${motivo}" ${tempo}`
+
+);
+
 
 
 }
@@ -411,37 +394,38 @@ async function tempBanPlayer(
 
 
 
-// ==========================
+// ===========================
 // KICK
-// ==========================
+// ===========================
 
 
 async function kickPlayer(
 
-    steamid,
+steamid,
 
-    reason
+reason
 
 ){
 
 
-    const motivo =
+const motivo =
 
-    reason?.trim()
+reason?.trim()
 
-    ||
+||
 
-    "Sem motivo informado";
-
-
+"Sem motivo informado";
 
 
 
-    return await rconCommand(
 
-        `kick "${steamid}" "${motivo}"`
 
-    );
+return await rconCommand(
+
+`kick "${steamid}" "${motivo}"`
+
+);
+
 
 
 }
@@ -454,23 +438,24 @@ async function kickPlayer(
 
 
 
-// ==========================
+// ===========================
 // UNBAN
-// ==========================
+// ===========================
 
 
 async function unbanPlayer(
 
-    steamid
+steamid
 
 ){
 
 
-    return await rconCommand(
+return await rconCommand(
 
-        `unban "${steamid}"`
+`unban "${steamid}"`
 
-    );
+);
+
 
 
 }
@@ -482,22 +467,22 @@ async function unbanPlayer(
 
 
 
-module.exports = {
+module.exports={
 
 
-    rconCommand,
+rconCommand,
 
-    getPlayers,
+getPlayers,
 
-    getServerInfo,
+getServerInfo,
 
-    banPlayer,
+banPlayer,
 
-    tempBanPlayer,
+tempBanPlayer,
 
-    kickPlayer,
+kickPlayer,
 
-    unbanPlayer
+unbanPlayer
 
 
 };
