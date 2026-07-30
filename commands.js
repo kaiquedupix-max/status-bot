@@ -600,3 +600,422 @@ ephemeral:true
 
 
 }
+
+
+async function handleSelect(interaction){
+
+
+const steamid = interaction.values[0];
+
+const tipo = interaction.customId.replace(
+"_select",
+""
+);
+
+
+
+const modal = new ModalBuilder()
+
+.setCustomId(
+
+`${tipo}_${steamid}`
+
+)
+
+.setTitle(
+
+tipo === "ban"
+
+?
+
+"🔨 Motivo do Ban"
+
+:
+
+"👢 Motivo do Kick"
+
+);
+
+
+
+
+
+const input = new TextInputBuilder()
+
+.setCustomId("motivo")
+
+.setLabel("Digite o motivo da punição")
+
+.setStyle(
+
+TextInputStyle.Paragraph
+
+)
+
+.setPlaceholder(
+
+"Exemplo: Racismo, cheat, ofensa..."
+
+)
+
+.setRequired(true);
+
+
+
+
+
+modal.addComponents(
+
+new ActionRowBuilder()
+
+.addComponents(input)
+
+);
+
+
+
+await interaction.showModal(modal);
+
+
+}
+
+
+
+
+
+
+
+
+
+async function handleModal(interaction){
+
+
+
+const [tipo, steamid] =
+
+interaction.customId.split("_");
+
+
+
+const motivo =
+
+interaction.fields.getTextInputValue(
+
+"motivo"
+
+);
+
+
+
+
+const players = await getPlayers();
+
+
+
+const player = players.find(
+
+p=>p.SteamID === steamid
+
+);
+
+
+
+const nome =
+
+player?.DisplayName || "Desconhecido";
+
+
+
+
+
+let resposta;
+
+
+
+
+
+if(tipo === "ban"){
+
+
+
+resposta = await banPlayer(
+
+steamid,
+
+nome,
+
+motivo
+
+);
+
+
+
+}
+
+
+
+if(tipo === "kick"){
+
+
+
+resposta = await kickPlayer(
+
+steamid,
+
+motivo
+
+);
+
+
+
+}
+
+
+
+
+
+salvarPunicao({
+
+steamid,
+
+name:nome,
+
+type:tipo.toUpperCase(),
+
+reason:motivo,
+
+admin:interaction.user.tag
+
+});
+
+
+
+
+
+await enviarLog({
+
+steamid,
+
+name:nome,
+
+type:tipo.toUpperCase(),
+
+reason:motivo,
+
+admin:interaction.user.tag
+
+});
+
+
+
+
+
+
+
+const embed = new EmbedBuilder()
+
+.setTitle(
+
+tipo==="ban"
+
+?
+
+"🔨 BANIMENTO APLICADO"
+
+:
+
+"👢 JOGADOR REMOVIDO"
+
+)
+
+.setDescription(`
+
+━━━━━━━━━━━━━━━
+
+
+👤 **Jogador**
+
+${nome}
+
+
+🆔 **SteamID**
+
+${steamid}
+
+
+📌 **Motivo**
+
+${motivo}
+
+
+👮 **Administrador**
+
+${interaction.user}
+
+
+🔗 **Apelação**
+
+https://discord.gg/s3J5NCYURD
+
+
+━━━━━━━━━━━━━━━
+
+
+📡 **Resposta Rust**
+
+${resposta}
+
+`)
+
+.setColor(
+
+tipo==="ban"
+
+?
+
+"Red"
+
+:
+
+"Orange"
+
+);
+
+
+
+
+return interaction.reply({
+
+embeds:[embed]
+
+});
+
+
+}
+
+
+
+
+
+
+
+
+
+
+async function handleButton(interaction){
+
+
+
+const id = interaction.customId;
+
+
+
+if(
+
+id.startsWith("ban_")
+
+|| 
+
+id.startsWith("kick_")
+
+){
+
+
+
+const tipo = id.split("_")[0];
+
+const steamid = id.split("_")[1];
+
+
+
+
+
+const modal = new ModalBuilder()
+
+.setCustomId(
+
+`${tipo}_${steamid}`
+
+)
+
+.setTitle(
+
+tipo==="ban"
+
+?
+
+"🔨 Motivo do Ban"
+
+:
+
+"👢 Motivo do Kick"
+
+);
+
+
+
+
+
+
+const input = new TextInputBuilder()
+
+.setCustomId("motivo")
+
+.setLabel("Motivo")
+
+.setStyle(
+
+TextInputStyle.Paragraph
+
+)
+
+.setRequired(true);
+
+
+
+
+
+modal.addComponents(
+
+new ActionRowBuilder()
+
+.addComponents(input)
+
+);
+
+
+
+return interaction.showModal(modal);
+
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+
+module.exports = {
+
+
+commands,
+
+execute,
+
+handleSelect,
+
+handleModal,
+
+handleButton,
+
+setClient
+
+
+};
