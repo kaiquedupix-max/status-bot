@@ -1,12 +1,14 @@
 const WebSocket = require("ws");
 
-
 let identifier = 0;
 
 
 function rconCommand(command){
 
-    return new Promise((resolve,reject)=>{
+    return new Promise((resolve, reject)=>{
+
+
+        console.log("📡 RCON ENVIANDO:", command);
 
 
         const ws = new WebSocket(
@@ -18,11 +20,17 @@ function rconCommand(command){
 
         const timeout = setTimeout(()=>{
 
+
+            console.log("⏰ RCON TIMEOUT");
+
+
             ws.close();
+
 
             reject(
                 new Error("RCON Timeout")
             );
+
 
         },15000);
 
@@ -31,14 +39,17 @@ function rconCommand(command){
         ws.on("open",()=>{
 
 
+            console.log("✅ RCON CONECTADO");
+
+
             identifier++;
 
 
             ws.send(JSON.stringify({
 
-                Identifier:identifier,
+                Identifier: identifier,
 
-                Message:command,
+                Message: command,
 
                 Name:"GuerraFriaBot"
 
@@ -55,12 +66,22 @@ function rconCommand(command){
             clearTimeout(timeout);
 
 
+
+            const response = data.toString();
+
+
+
+            console.log(
+                "📥 RCON RESPOSTA:",
+                response
+            );
+
+
+
             try{
 
 
-                const json = JSON.parse(
-                    data.toString()
-                );
+                const json = JSON.parse(response);
 
 
                 resolve(json.Message);
@@ -70,15 +91,15 @@ function rconCommand(command){
             }catch{
 
 
-                resolve(
-                    data.toString()
-                );
+                resolve(response);
 
 
             }
 
 
+
             ws.close();
+
 
 
         });
@@ -91,7 +112,26 @@ function rconCommand(command){
             clearTimeout(timeout);
 
 
+            console.log(
+                "❌ RCON ERRO:",
+                err.message
+            );
+
+
             reject(err);
+
+
+
+        });
+
+
+
+        ws.on("close",()=>{
+
+
+            console.log(
+                "🔌 RCON DESCONECTADO"
+            );
 
 
         });
@@ -105,27 +145,35 @@ function rconCommand(command){
 
 
 
+
 // Lista jogadores online
 
 async function getPlayers(){
 
 
-    const response = await rconCommand(
-        "playerlist"
-    );
-
-
     try{
+
+
+        const response = await rconCommand(
+            "playerlist"
+        );
 
 
         return JSON.parse(response);
 
 
 
-    }catch{
+    }catch(error){
+
+
+        console.log(
+            "❌ Erro playerlist:",
+            error.message
+        );
 
 
         return [];
+
 
     }
 
@@ -134,52 +182,89 @@ async function getPlayers(){
 
 
 
-// Dados servidor
+
+
+// Dados do servidor
 
 async function getServerInfo(){
 
 
-    const response = await rconCommand(
-        "serverinfo"
-    );
+    try{
 
 
-    return JSON.parse(response);
+        const response = await rconCommand(
+            "serverinfo"
+        );
+
+
+        return JSON.parse(response);
+
+
+
+    }catch(error){
+
+
+        console.log(
+            "❌ Erro serverinfo:",
+            error.message
+        );
+
+
+        return {
+
+            Players:0,
+
+            MaxPlayers:0,
+
+            Map:"Offline",
+
+            Framerate:0
+
+        };
+
+
+    }
 
 
 }
+
+
 
 
 
 // Ban
 
-async function banPlayer(id,reason){
+async function banPlayer(id, reason){
 
 
     return await rconCommand(
 
-        `ban ${id} ${reason}`
+        `ban ${id} "${reason}"`
 
     );
 
 
 }
+
+
 
 
 
 // Kick
 
-async function kickPlayer(id,reason){
+async function kickPlayer(id, reason){
 
 
     return await rconCommand(
 
-        `kick ${id} ${reason}`
+        `kick ${id} "${reason}"`
 
     );
 
 
 }
+
+
 
 
 
@@ -199,7 +284,10 @@ async function unbanPlayer(id){
 
 
 
+
+
 module.exports = {
+
 
     rconCommand,
 
@@ -212,5 +300,6 @@ module.exports = {
     kickPlayer,
 
     unbanPlayer
+
 
 };
