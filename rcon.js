@@ -1,216 +1,528 @@
 const WebSocket = require("ws");
 
 
+const {
+    savePlayer
+} = require("./database");
+
+
+
 let identifier = 0;
+
+
+
+
+function debug(...args){
+
+    if(process.env.DEBUG_RCON === "true"){
+
+        console.log(...args);
+
+    }
+
+}
+
+
+
 
 
 function rconCommand(command){
 
-    return new Promise((resolve,reject)=>{
+
+return new Promise((resolve,reject)=>{
 
 
-        const ws = new WebSocket(
-
-            `ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
-
-        );
-
-
-        const timeout = setTimeout(()=>{
-
-            ws.close();
-
-            reject(
-                new Error("RCON Timeout")
-            );
-
-        },15000);
+debug(
+"📡 RCON:",
+command
+);
 
 
 
-        ws.on("open",()=>{
+const ws = new WebSocket(
 
+`ws://${process.env.RCON_HOST}:${process.env.RCON_PORT}/${process.env.RCON_PASSWORD}`
 
-            identifier++;
-
-
-            ws.send(JSON.stringify({
-
-                Identifier:identifier,
-
-                Message:command,
-
-                Name:"GuerraFriaBot"
-
-            }));
-
-
-        });
+);
 
 
 
-        ws.on("message",(data)=>{
+const timeout = setTimeout(()=>{
 
 
-            clearTimeout(timeout);
+ws.close();
 
 
-            try{
+reject(
+new Error("RCON timeout")
+);
 
 
-                const json = JSON.parse(
-                    data.toString()
-                );
-
-
-                resolve(json.Message);
+},15000);
 
 
 
-            }catch{
-
-
-                resolve(
-                    data.toString()
-                );
-
-
-            }
-
-
-            ws.close();
-
-
-        });
 
 
 
-        ws.on("error",(err)=>{
+
+ws.on("open",()=>{
 
 
-            clearTimeout(timeout);
-
-
-            reject(err);
-
-
-        });
+identifier++;
 
 
 
-    });
+ws.send(JSON.stringify({
+
+Identifier:identifier,
+
+Message:command,
+
+Name:"GuerraFriaAdmin"
+
+}));
+
+
+
+});
+
+
+
+
+
+
+
+
+ws.on("message",(data)=>{
+
+
+clearTimeout(timeout);
+
+
+
+try{
+
+
+const response = JSON.parse(
+
+data.toString()
+
+);
+
+
+
+resolve(
+
+response.Message
+
+);
+
+
+
+}catch{
+
+
+resolve(
+
+data.toString()
+
+);
+
 
 
 }
 
 
 
-// Lista jogadores online
+ws.close();
+
+
+
+});
+
+
+
+
+
+
+
+
+ws.on("error",(error)=>{
+
+
+clearTimeout(timeout);
+
+
+
+console.log(
+
+"❌ RCON:",
+error.message
+
+);
+
+
+
+reject(error);
+
+
+
+});
+
+
+
+});
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// =======================
+// PLAYERS ONLINE
+// =======================
+
 
 async function getPlayers(){
 
 
-    const response = await rconCommand(
-        "playerlist"
-    );
+try{
 
 
-    try{
+const response = await rconCommand(
+
+"playerlist"
+
+);
 
 
-        return JSON.parse(response);
+
+const players = JSON.parse(response);
 
 
 
-    }catch{
 
 
-        return [];
+// salva jogadores no banco
 
-    }
+players.forEach(player=>{
+
+
+savePlayer(player);
+
+
+
+});
+
+
+
+
+
+return players;
+
+
+
+}catch(error){
+
+
+console.log(
+
+"Erro playerlist:",
+
+error.message
+
+);
+
+
+
+return [];
+
+}
 
 
 }
 
 
 
-// Dados servidor
+
+
+
+
+
+
+// =======================
+// INFO SERVIDOR
+// =======================
+
 
 async function getServerInfo(){
 
 
-    const response = await rconCommand(
-        "serverinfo"
-    );
+try{
 
 
-    return JSON.parse(response);
+const response = await rconCommand(
+
+"serverinfo"
+
+);
+
+
+
+return JSON.parse(response);
+
+
+
+}catch(error){
+
+
+console.log(
+
+"Erro serverinfo:",
+
+error.message
+
+);
+
+
+
+return {
+
+Players:0,
+
+MaxPlayers:125,
+
+Uptime:0,
+
+Hostname:""
+
+};
+
+
+}
 
 
 }
 
 
 
-// Ban
-
-async function banPlayer(id,reason){
 
 
-    return await rconCommand(
 
-        `ban ${id} ${reason}`
 
-    );
+
+
+// =======================
+// BAN ONLINE/OFFLINE
+// =======================
+
+
+async function banPlayer(
+
+steamid,
+
+name,
+
+reason
+
+){
+
+
+
+const motivo =
+
+reason?.trim()
+
+||
+
+"Sem motivo informado";
+
+
+
+
+
+const finalReason =
+
+`${motivo} | Apelação: discord.gg/s3J5NCYURD`;
+
+
+
+
+
+return await rconCommand(
+
+`banid "${steamid}" "${name}" "${finalReason}"`
+
+);
+
 
 
 }
 
 
 
-// Kick
-
-async function kickPlayer(id,reason){
 
 
-    return await rconCommand(
 
-        `kick ${id} ${reason}`
 
-    );
+
+
+// =======================
+// BAN TEMPORÁRIO
+// =======================
+
+
+async function tempBanPlayer(
+
+steamid,
+
+name,
+
+reason,
+
+duration
+
+){
+
+
+
+const motivo =
+
+reason?.trim()
+
+||
+
+"Sem motivo informado";
+
+
+
+
+
+const finalReason =
+
+`${motivo} | Apelação: discord.gg/s3J5NCYURD`;
+
+
+
+
+
+return await rconCommand(
+
+`banid "${steamid}" "${name}" "${finalReason}" ${duration}`
+
+);
+
 
 
 }
 
 
 
-// Unban
-
-async function unbanPlayer(id){
 
 
-    return await rconCommand(
 
-        `unban ${id}`
 
-    );
+
+
+// =======================
+// KICK
+// =======================
+
+
+async function kickPlayer(
+
+steamid,
+
+reason
+
+){
+
+
+
+const motivo =
+
+reason?.trim()
+
+||
+
+"Sem motivo informado";
+
+
+
+
+
+return await rconCommand(
+
+`kick "${steamid}" "${motivo}"`
+
+);
+
 
 
 }
+
+
+
+
+
+
+
+
+
+// =======================
+// UNBAN
+// =======================
+
+
+async function unbanPlayer(
+
+steamid
+
+){
+
+
+
+return await rconCommand(
+
+`unban "${steamid}"`
+
+);
+
+
+
+}
+
+
+
+
+
 
 
 
 module.exports = {
 
-    rconCommand,
 
-    getPlayers,
+rconCommand,
 
-    getServerInfo,
+getPlayers,
 
-    banPlayer,
+getServerInfo,
 
-    kickPlayer,
+banPlayer,
 
-    unbanPlayer
+tempBanPlayer,
+
+kickPlayer,
+
+unbanPlayer
+
 
 };
