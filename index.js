@@ -1,129 +1,82 @@
 require("dotenv").config();
 
+const fs = require("fs");
+
 const {
     Client,
     GatewayIntentBits,
-    EmbedBuilder
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require("discord.js");
 
 
 const {
+
     execute,
     handleSelect,
-    handleModal
+    handleModal,
+    handleButton,
+    setClient
+
 } = require("./commands");
 
 
+
 const {
-    getServerInfo
+
+    getServerInfo,
+    getPlayers
+
 } = require("./rcon");
+
+
 
 
 
 const client = new Client({
 
     intents:[
+
         GatewayIntentBits.Guilds
+
     ]
 
 });
 
 
 
-let statusMessage;
 
 
 
-// =====================================
-// ATUALIZAR STATUS
-// =====================================
+const STATUS_FILE = "./status.json";
 
-async function updateStatus(){
+
+
+
+
+
+
+
+
+function readStatus(){
 
 
 try{
 
+return JSON.parse(
 
-const channel = await client.channels.fetch(
-    process.env.CHANNEL_ID
-);
-
-
-
-const rust = await getServerInfo();
-
-
-
-const players =
-rust.Players ?? 0;
-
-
-
-const max =
-rust.MaxPlayers ?? 125;
-
-
-
-const embed = new EmbedBuilder()
-
-
-.setTitle(
-"🟢 SERVIDOR ONLINE"
-)
-
-
-.setDescription(
-
-`
-🎮 **${process.env.SERVER_NAME}**
-
-👥 **Players:** ${players}/${max}
-
-🗺️ **Mapa:** ${rust.Map}
-
-⚡ **FPS:** ${Math.round(rust.Framerate)}
-
-🌎 **IP:** ${process.env.GAME_IP}
-
-🔄 Atualizado: <t:${Math.floor(Date.now()/1000)}:R>
-`
-
-)
-
-
-.setColor("Green");
-
-
-
-
-
-client.user.setActivity(
-
-`Guerra Fria 2x | ${players}/${max} jogadores`
+fs.readFileSync(STATUS_FILE)
 
 );
 
 
+}catch{
 
+return {};
 
-if(statusMessage){
-
-
-await statusMessage.edit({
-
-embeds:[embed]
-
-});
-
-
-}else{
-
-
-statusMessage = await channel.send({
-
-embeds:[embed]
-
-});
+}
 
 
 }
@@ -131,8 +84,277 @@ embeds:[embed]
 
 
 
+
+
+
+
+function saveStatus(data){
+
+
+fs.writeFileSync(
+
+STATUS_FILE,
+
+JSON.stringify(data,null,2)
+
+);
+
+
+}
+
+
+
+
+
+
+
+
+
+function formatUptime(seconds){
+
+
+
+if(!seconds)
+
+return "0 minutos";
+
+
+
+const h = Math.floor(seconds / 3600);
+
+const m = Math.floor(
+
+(seconds % 3600) / 60
+
+);
+
+
+
+return `${h}h ${m}min`;
+
+
+
+}
+
+
+
+
+
+
+
+
+
+async function updateStatus(){
+
+
+try{
+
+
+
+const channel = await client.channels.fetch(
+
+process.env.STATUS_CHANNEL_ID
+
+);
+
+
+
+
+const server = await getServerInfo();
+
+
+const players = await getPlayers();
+
+
+
+
+const online = players.length;
+
+
+const max = server.MaxPlayers || 125;
+
+
+
+
+
+
+const embed = new EmbedBuilder()
+
+
+.setTitle(
+
+"🟢 GUERRA FRIA 2X"
+
+)
+
+
+
+.setDescription(`
+
+🎮 **Servidor Online**
+
+
+👥 **Jogadores**
+
+\`${online}/${max}\` online
+
+
+⏱️ **Uptime**
+
+${formatUptime(server.Uptime)}
+
+
+🌐 **Conectar**
+
+\`client.connect ${process.env.GAME_IP}\`
+
+
+📡 **IP**
+
+${process.env.GAME_IP}
+
+
+🔄 Atualizado:
+
+<t:${Math.floor(Date.now()/1000)}:R>
+
+`)
+
+
+
+.setColor(
+
+"Green"
+
+);
+
+
+
+
+
+
+
+
+const button = new ButtonBuilder()
+
+.setLabel(
+
+"🎮 Conectar no servidor"
+
+)
+
+.setStyle(
+
+ButtonStyle.Link
+
+)
+
+.setURL(
+
+`steam://connect/${process.env.GAME_IP}`
+
+);
+
+
+
+
+
+const row = new ActionRowBuilder()
+
+.addComponents(button);
+
+
+
+
+
+
+
+const old = readStatus();
+
+
+
+
+
+if(old.messageId){
+
+
+
+try{
+
+
+
+const message = await channel.messages.fetch(
+
+old.messageId
+
+);
+
+
+
+await message.edit({
+
+embeds:[embed],
+
+components:[row]
+
+});
+
+
+
+return;
+
+
+
+}catch(error){
+
+
+
 console.log(
+
+"Mensagem antiga não encontrada."
+
+);
+
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+const message = await channel.send({
+
+embeds:[embed],
+
+components:[row]
+
+});
+
+
+
+
+
+saveStatus({
+
+messageId:message.id
+
+});
+
+
+
+
+
+
+console.log(
+
 "✅ Status atualizado"
+
 );
 
 
@@ -141,40 +363,50 @@ console.log(
 
 
 console.log(
+
 "❌ Erro status:",
+
 error.message
+
 );
 
 
-}
-
-
 
 }
 
 
 
+}
 
 
 
-// =====================================
-// BOT ONLINE
-// =====================================
+
+
+
+
 
 
 client.once(
+
 "clientReady",
 
 ()=>{
 
 
 console.log(
+
 `🤖 Bot conectado: ${client.user.tag}`
+
 );
 
 
 
+setClient(client);
+
+
+
 updateStatus();
+
 
 
 
@@ -196,9 +428,7 @@ updateStatus,
 
 
 
-// =====================================
-// INTERAÇÕES
-// =====================================
+
 
 
 client.on(
@@ -211,41 +441,37 @@ async interaction=>{
 try{
 
 
-// Slash Commands
 
 if(interaction.isChatInputCommand()){
 
-
-await execute(interaction);
-
+return execute(interaction);
 
 }
 
 
-
-
-// Menu jogador
 
 if(interaction.isStringSelectMenu()){
 
-
-await handleSelect(interaction);
-
+return handleSelect(interaction);
 
 }
 
 
-
-
-// Modal motivo
 
 if(interaction.isModalSubmit()){
 
-
-await handleModal(interaction);
-
+return handleModal(interaction);
 
 }
+
+
+
+if(interaction.isButton()){
+
+return handleButton(interaction);
+
+}
+
 
 
 
@@ -254,8 +480,11 @@ await handleModal(interaction);
 
 
 console.log(
+
 "❌ Erro interação:",
+
 error
+
 );
 
 
@@ -264,8 +493,7 @@ if(!interaction.replied){
 
 interaction.reply({
 
-content:
-"❌ Ocorreu um erro.",
+content:"❌ Erro interno.",
 
 ephemeral:true
 
@@ -274,11 +502,14 @@ ephemeral:true
 }
 
 
+
 }
 
 
 
 });
+
+
 
 
 
