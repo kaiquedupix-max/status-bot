@@ -1,13 +1,26 @@
 require("dotenv").config();
 
-const {
-    REST,
-    Routes
-} = require("discord.js");
 
 const {
+
+    REST,
+
+    Routes
+
+} = require("discord.js");
+
+
+
+const {
+
     commands
+
 } = require("./commands");
+
+
+
+
+
 
 
 const rest = new REST({
@@ -22,58 +35,95 @@ const rest = new REST({
 
 
 
+
+
+
+
+
 async function deploy(){
 
 
-    try{
-
-
-        console.log("🔄 Registrando comandos...");
-
-
-        await rest.put(
-
-            Routes.applicationGuildCommands(
-
-                process.env.CLIENT_ID,
-
-                process.env.GUILD_ID
-
-            ),
-
-            {
-
-                body: commands.map(
-                    cmd=>cmd.toJSON()
-                )
-
-            }
-
-        );
+try{
 
 
 
-        console.log(
-            "✅ Comandos registrados!"
-        );
+console.log(
+
+"🔄 Registrando comandos..."
+
+);
 
 
 
-    }catch(error){
 
 
-        console.log(
-            "❌ Erro registrando comandos:"
-        );
+await rest.put(
 
 
-        console.log(error);
+Routes.applicationGuildCommands(
+
+process.env.CLIENT_ID,
+
+process.env.GUILD_ID
+
+),
 
 
-    }
+
+{
+
+body:
+
+commands.map(
+
+cmd=>cmd.toJSON()
+
+)
+
+}
+
+
+
+);
+
+
+
+
+
+console.log(
+
+"✅ Comandos registrados com sucesso!"
+
+);
+
+
+
+
+
+}catch(error){
+
+
+
+console.log(
+
+"❌ Erro ao registrar comandos:"
+
+);
+
+
+
+console.log(error);
+
 
 
 }
+
+
+
+}
+
+
+
 
 
 
