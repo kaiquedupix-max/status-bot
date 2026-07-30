@@ -9,9 +9,6 @@ const {
 } = require("discord.js");
 
 
-const Database = require("better-sqlite3");
-
-
 const {
     getPlayers,
     banPlayer,
@@ -21,17 +18,13 @@ const {
 
 
 
-const db = new Database("database.sqlite");
-
-
-
-let clientDiscord;
+let discordClient;
 
 
 
 function setClient(client){
 
-    clientDiscord = client;
+    discordClient = client;
 
 }
 
@@ -51,55 +44,15 @@ function isAdmin(interaction){
 
 
 
-function salvarPunicao(data){
-
-
-    db.prepare(`
-
-    INSERT INTO punishments
-
-    (
-    steamid,
-    name,
-    type,
-    reason,
-    admin,
-    created
-    )
-
-    VALUES (?,?,?,?,?,?)
-
-    `).run(
-
-        data.steamid,
-        data.name,
-        data.type,
-        data.reason,
-        data.admin,
-        Date.now()
-
-    );
-
-
-}
-
-
-
-
-
-
-
-
-
-async function enviarLog(data){
+async function sendBanLog(data){
 
 
 try{
 
 
-const channel = await clientDiscord.channels.fetch(
+const channel = await discordClient.channels.fetch(
 
-    process.env.BAN_LOG_CHANNEL_ID
+process.env.BAN_LOG_CHANNEL_ID
 
 );
 
@@ -107,17 +60,14 @@ const channel = await clientDiscord.channels.fetch(
 
 const embed = new EmbedBuilder()
 
-
 .setTitle(
-
-"🚨 NOVA PUNIÇÃO"
-
+"🚨 PUNIÇÃO APLICADA"
 )
 
 
 .setDescription(`
 
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━
 
 👤 **Jogador**
 
@@ -131,7 +81,7 @@ ${data.steamid}
 
 🔨 **Ação**
 
-${data.type}
+${data.action}
 
 
 📌 **Motivo**
@@ -144,21 +94,21 @@ ${data.reason}
 ${data.admin}
 
 
-🕒 <t:${Math.floor(Date.now()/1000)}:F>
-
-
 🔗 **Apelação**
 
 https://discord.gg/s3J5NCYURD
 
-━━━━━━━━━━━━━━━
+
+🕒 <t:${Math.floor(Date.now()/1000)}:F>
+
+━━━━━━━━━━━━━━
 
 `)
 
 
 .setColor(
 
-data.type === "BAN"
+data.action==="BAN"
 
 ?
 
@@ -182,15 +132,12 @@ embeds:[embed]
 
 }catch(error){
 
-
 console.log(
 "Erro log:",
 error.message
 );
 
-
 }
-
 
 
 }
@@ -205,35 +152,13 @@ error.message
 
 const commands = [
 
-
-
 new SlashCommandBuilder()
 
 .setName("listar-player")
 
-.setDescription("Lista jogadores online"),
-
-
-
-
-new SlashCommandBuilder()
-
-.setName("buscar-player")
-
-.setDescription("Busca jogador")
-
-.addStringOption(option =>
-
-option
-
-.setName("steamid")
-
-.setDescription("SteamID")
-
-.setRequired(true)
-
+.setDescription(
+"Lista jogadores online"
 ),
-
 
 
 
@@ -241,8 +166,9 @@ new SlashCommandBuilder()
 
 .setName("banir")
 
-.setDescription("Banir jogador online"),
-
+.setDescription(
+"Banir jogador online"
+),
 
 
 
@@ -250,8 +176,9 @@ new SlashCommandBuilder()
 
 .setName("kickar")
 
-.setDescription("Kickar jogador online"),
-
+.setDescription(
+"Kickar jogador online"
+),
 
 
 
@@ -259,9 +186,11 @@ new SlashCommandBuilder()
 
 .setName("desbanir")
 
-.setDescription("Remove ban")
+.setDescription(
+"Remove ban pelo SteamID"
+)
 
-.addStringOption(option =>
+.addStringOption(option=>
 
 option
 
@@ -272,7 +201,6 @@ option
 .setRequired(true)
 
 )
-
 
 ];
 
@@ -287,50 +215,62 @@ option
 async function execute(interaction){
 
 
-
-if(interaction.commandName === "listar-player"){
+if(interaction.commandName==="listar-player"){
 
 
 const players = await getPlayers();
 
 
 
+if(!players.length){
+
 return interaction.reply({
 
-embeds:[
+content:
+"🟡 Nenhum jogador online",
 
-new EmbedBuilder()
+ephemeral:true
+
+});
+
+}
+
+
+
+const embed = new EmbedBuilder()
 
 .setTitle(
-
 "📋 Jogadores Online"
-
 )
 
 .setDescription(
 
-players.length
-
-?
-
 players.map(p=>
 
-`👤 **${p.DisplayName}**
-🆔 ${p.SteamID}`
+`
 
-).join("\n\n")
+👤 **${p.DisplayName}**
 
-:
+🆔 ${p.SteamID}
 
-"🟡 Nenhum jogador online"
+📶 ${p.Ping}ms
+
+`
+
+).join("\n")
 
 )
 
-.setColor("Green")
+.setColor("Green");
 
-]
+
+
+return interaction.reply({
+
+embeds:[embed]
 
 });
+
 
 
 }
@@ -340,11 +280,9 @@ players.map(p=>
 
 
 
-
-
 if(
 
-interaction.commandName === "banir"
+interaction.commandName==="banir"
 
 ){
 
@@ -354,7 +292,7 @@ if(!isAdmin(interaction))
 
 return interaction.reply({
 
-content:"❌ Sem permissão.",
+content:"❌ Sem permissão",
 
 ephemeral:true
 
@@ -362,7 +300,7 @@ ephemeral:true
 
 
 
-return abrirSelecao(
+return abrirMenu(
 
 interaction,
 
@@ -379,19 +317,19 @@ interaction,
 
 
 
-
 if(
 
-interaction.commandName === "kickar"
+interaction.commandName==="kickar"
 
 ){
+
 
 
 if(!isAdmin(interaction))
 
 return interaction.reply({
 
-content:"❌ Sem permissão.",
+content:"❌ Sem permissão",
 
 ephemeral:true
 
@@ -399,7 +337,7 @@ ephemeral:true
 
 
 
-return abrirSelecao(
+return abrirMenu(
 
 interaction,
 
@@ -415,11 +353,9 @@ interaction,
 
 
 
-
-
 if(
 
-interaction.commandName === "desbanir"
+interaction.commandName==="desbanir"
 
 ){
 
@@ -447,103 +383,42 @@ content:
 
 });
 
-
-
-}
-
-
-
-
-
-
-
-
-if(
-
-interaction.commandName === "buscar-player"
-
-){
-
-
-const id =
-
-interaction.options.getString(
-
-"steamid"
-
-);
-
-
-
-const players =
-
-await getPlayers();
-
-
-
-const player =
-
-players.find(
-
-p=>p.SteamID === id
-
-);
-
-
-
-return interaction.reply({
-
-embeds:[
-
-new EmbedBuilder()
-
-.setTitle("🔎 Jogador")
-
-.setDescription(`
-
-👤 ${player?.DisplayName || "Offline"}
-
-🆔 ${id}
-
-`)
-
-.setColor("Blue")
-
-]
-
-});
-
-
-
 }
 
 
 }
 
 
-
-
-
-
-
-
-
-async function abrirSelecao(interaction,tipo){
+async function abrirMenu(interaction,tipo){
 
 
 const players = await getPlayers();
 
 
 
-const menu = new StringSelectMenuBuilder()
+if(!players.length){
 
+return interaction.reply({
+
+content:"🟡 Nenhum jogador online.",
+
+ephemeral:true
+
+});
+
+}
+
+
+
+
+
+const menu = new StringSelectMenuBuilder()
 
 .setCustomId(
 
-`${tipo}_select`
+`${tipo}_player`
 
 )
-
 
 .setPlaceholder(
 
@@ -551,22 +426,38 @@ const menu = new StringSelectMenuBuilder()
 
 )
 
-
 .addOptions(
 
-players.slice(0,25)
+players.slice(0,25).map(player=>({
 
-.map(p=>({
 
-label:p.DisplayName.substring(0,100),
+label:
 
-description:p.SteamID,
+player.DisplayName.substring(0,100),
 
-value:p.SteamID
+
+description:
+
+player.SteamID,
+
+
+value:
+
+player.SteamID
+
+
 
 }))
 
 );
+
+
+
+
+
+const row = new ActionRowBuilder()
+
+.addComponents(menu);
 
 
 
@@ -580,37 +471,48 @@ tipo==="ban"
 
 ?
 
-"🔨 Selecione quem será banido"
+"🔨 Escolha o jogador para banir:"
 
 :
 
-"👢 Selecione quem será kickado",
+"👢 Escolha o jogador para kickar:",
 
-components:[
 
-new ActionRowBuilder()
+components:[row],
 
-.addComponents(menu)
-
-],
 
 ephemeral:true
 
 });
 
 
+
 }
+
+
+
+
+
+
+
 
 
 async function handleSelect(interaction){
 
 
+
 const steamid = interaction.values[0];
 
+
 const tipo = interaction.customId.replace(
-"_select",
+
+"_player",
+
 ""
+
 );
+
+
 
 
 
@@ -624,7 +526,7 @@ const modal = new ModalBuilder()
 
 .setTitle(
 
-tipo === "ban"
+tipo==="ban"
 
 ?
 
@@ -640,11 +542,21 @@ tipo === "ban"
 
 
 
-const input = new TextInputBuilder()
 
-.setCustomId("motivo")
 
-.setLabel("Digite o motivo da punição")
+const motivo = new TextInputBuilder()
+
+.setCustomId(
+
+"motivo"
+
+)
+
+.setLabel(
+
+"Digite o motivo"
+
+)
 
 .setStyle(
 
@@ -654,7 +566,7 @@ TextInputStyle.Paragraph
 
 .setPlaceholder(
 
-"Exemplo: Racismo, cheat, ofensa..."
+"Exemplo: Cheat, racismo, ofensa..."
 
 )
 
@@ -668,13 +580,16 @@ modal.addComponents(
 
 new ActionRowBuilder()
 
-.addComponents(input)
+.addComponents(motivo)
 
 );
 
 
 
+
+
 await interaction.showModal(modal);
+
 
 
 }
@@ -691,9 +606,14 @@ async function handleModal(interaction){
 
 
 
-const [tipo, steamid] =
+const dados = interaction.customId.split("_");
 
-interaction.customId.split("_");
+
+
+const tipo = dados[0];
+
+const steamid = dados[1];
+
 
 
 
@@ -708,15 +628,18 @@ interaction.fields.getTextInputValue(
 
 
 
+
+
 const players = await getPlayers();
 
 
 
 const player = players.find(
 
-p=>p.SteamID === steamid
+p=>p.SteamID===steamid
 
 );
+
 
 
 
@@ -728,13 +651,15 @@ player?.DisplayName || "Desconhecido";
 
 
 
+
+
 let resposta;
 
 
 
 
 
-if(tipo === "ban"){
+if(tipo==="ban"){
 
 
 
@@ -754,7 +679,10 @@ motivo
 
 
 
-if(tipo === "kick"){
+
+
+
+if(tipo==="kick"){
 
 
 
@@ -774,13 +702,26 @@ motivo
 
 
 
-salvarPunicao({
 
-steamid,
+
+
+await sendBanLog({
 
 name:nome,
 
-type:tipo.toUpperCase(),
+steamid,
+
+action:
+
+tipo==="ban"
+
+?
+
+"BAN"
+
+:
+
+"KICK",
 
 reason:motivo,
 
@@ -788,23 +729,6 @@ admin:interaction.user.tag
 
 });
 
-
-
-
-
-await enviarLog({
-
-steamid,
-
-name:nome,
-
-type:tipo.toUpperCase(),
-
-reason:motivo,
-
-admin:interaction.user.tag
-
-});
 
 
 
@@ -820,17 +744,18 @@ tipo==="ban"
 
 ?
 
-"🔨 BANIMENTO APLICADO"
+"🔨 BAN APLICADO"
 
 :
 
-"👢 JOGADOR REMOVIDO"
+"👢 KICK APLICADO"
 
 )
 
+
 .setDescription(`
 
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━
 
 
 👤 **Jogador**
@@ -858,14 +783,16 @@ ${interaction.user}
 https://discord.gg/s3J5NCYURD
 
 
-━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━
 
 
 📡 **Resposta Rust**
 
 ${resposta}
 
+
 `)
+
 
 .setColor(
 
@@ -884,11 +811,13 @@ tipo==="ban"
 
 
 
+
 return interaction.reply({
 
 embeds:[embed]
 
 });
+
 
 
 }
@@ -905,104 +834,20 @@ embeds:[embed]
 async function handleButton(interaction){
 
 
-
-const id = interaction.customId;
-
-
-
-if(
-
-id.startsWith("ban_")
-
-|| 
-
-id.startsWith("kick_")
-
-){
-
-
-
-const tipo = id.split("_")[0];
-
-const steamid = id.split("_")[1];
-
-
-
-
-
-const modal = new ModalBuilder()
-
-.setCustomId(
-
-`${tipo}_${steamid}`
-
-)
-
-.setTitle(
-
-tipo==="ban"
-
-?
-
-"🔨 Motivo do Ban"
-
-:
-
-"👢 Motivo do Kick"
-
-);
-
-
-
-
-
-
-const input = new TextInputBuilder()
-
-.setCustomId("motivo")
-
-.setLabel("Motivo")
-
-.setStyle(
-
-TextInputStyle.Paragraph
-
-)
-
-.setRequired(true);
-
-
-
-
-
-modal.addComponents(
-
-new ActionRowBuilder()
-
-.addComponents(input)
-
-);
-
-
-
-return interaction.showModal(modal);
+return;
 
 
 
 }
 
 
-}
 
 
 
 
 
 
-
-
-
-module.exports = {
+module.exports={
 
 
 commands,
