@@ -1,14 +1,17 @@
 const WebSocket = require("ws");
 
+
 let identifier = 0;
+
 
 
 function rconCommand(command){
 
-    return new Promise((resolve, reject)=>{
+    return new Promise((resolve,reject)=>{
 
 
         console.log("📡 RCON ENVIANDO:", command);
+
 
 
         const ws = new WebSocket(
@@ -18,10 +21,13 @@ function rconCommand(command){
         );
 
 
+
         const timeout = setTimeout(()=>{
 
 
-            console.log("⏰ RCON TIMEOUT");
+            console.log(
+                "⏰ RCON TIMEOUT"
+            );
 
 
             ws.close();
@@ -36,13 +42,19 @@ function rconCommand(command){
 
 
 
+
+
         ws.on("open",()=>{
 
 
-            console.log("✅ RCON CONECTADO");
+            console.log(
+                "✅ RCON CONECTADO"
+            );
+
 
 
             identifier++;
+
 
 
             ws.send(JSON.stringify({
@@ -60,6 +72,10 @@ function rconCommand(command){
 
 
 
+
+
+
+
         ws.on("message",(data)=>{
 
 
@@ -67,13 +83,14 @@ function rconCommand(command){
 
 
 
-            const response = data.toString();
+            let raw =
+            data.toString();
 
 
 
             console.log(
                 "📥 RCON RESPOSTA:",
-                response
+                raw
             );
 
 
@@ -81,17 +98,21 @@ function rconCommand(command){
             try{
 
 
-                const json = JSON.parse(response);
+                const json =
+                JSON.parse(raw);
 
 
-                resolve(json.Message);
+
+                resolve(
+                    json.Message
+                );
 
 
 
             }catch{
 
 
-                resolve(response);
+                resolve(raw);
 
 
             }
@@ -101,52 +122,48 @@ function rconCommand(command){
             ws.close();
 
 
-
         });
 
 
 
-        ws.on("error",(err)=>{
+
+
+
+
+        ws.on("error",(error)=>{
 
 
             clearTimeout(timeout);
 
 
+
             console.log(
                 "❌ RCON ERRO:",
-                err.message
+                error.message
             );
 
 
-            reject(err);
 
+            reject(error);
 
 
         });
 
-
-
-        ws.on("close",()=>{
-
-
-            console.log(
-                "🔌 RCON DESCONECTADO"
-            );
-
-
-        });
 
 
 
     });
-
 
 }
 
 
 
 
-// Lista jogadores online
+
+// =============================
+// JOGADORES ONLINE
+// =============================
+
 
 async function getPlayers(){
 
@@ -154,9 +171,11 @@ async function getPlayers(){
     try{
 
 
-        const response = await rconCommand(
+        const response =
+        await rconCommand(
             "playerlist"
         );
+
 
 
         return JSON.parse(response);
@@ -167,7 +186,7 @@ async function getPlayers(){
 
 
         console.log(
-            "❌ Erro playerlist:",
+            "Erro playerlist:",
             error.message
         );
 
@@ -184,7 +203,12 @@ async function getPlayers(){
 
 
 
-// Dados do servidor
+
+
+// =============================
+// INFORMAÇÕES SERVIDOR
+// =============================
+
 
 async function getServerInfo(){
 
@@ -192,9 +216,11 @@ async function getServerInfo(){
     try{
 
 
-        const response = await rconCommand(
+        const response =
+        await rconCommand(
             "serverinfo"
         );
+
 
 
         return JSON.parse(response);
@@ -205,16 +231,17 @@ async function getServerInfo(){
 
 
         console.log(
-            "❌ Erro serverinfo:",
+            "Erro serverinfo:",
             error.message
         );
+
 
 
         return {
 
             Players:0,
 
-            MaxPlayers:0,
+            MaxPlayers:125,
 
             Map:"Offline",
 
@@ -232,14 +259,22 @@ async function getServerInfo(){
 
 
 
-// Ban
 
-async function banPlayer(id, reason){
+
+// =============================
+// BAN
+// =============================
+
+
+async function banPlayer(
+    steamid,
+    reason
+){
 
 
     return await rconCommand(
 
-        `ban ${id} "${reason}"`
+        `banid ${steamid} "${reason}"`
 
     );
 
@@ -250,14 +285,22 @@ async function banPlayer(id, reason){
 
 
 
-// Kick
 
-async function kickPlayer(id, reason){
+
+// =============================
+// KICK
+// =============================
+
+
+async function kickPlayer(
+    steamid,
+    reason
+){
 
 
     return await rconCommand(
 
-        `kick ${id} "${reason}"`
+        `kick ${steamid} "${reason}"`
 
     );
 
@@ -268,19 +311,28 @@ async function kickPlayer(id, reason){
 
 
 
-// Unban
 
-async function unbanPlayer(id){
+
+// =============================
+// UNBAN
+// =============================
+
+
+async function unbanPlayer(
+    steamid
+){
 
 
     return await rconCommand(
 
-        `unban ${id}`
+        `unban ${steamid}`
 
     );
 
 
 }
+
+
 
 
 
