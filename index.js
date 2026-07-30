@@ -4,7 +4,10 @@ require("dotenv").config();
 const {
     Client,
     GatewayIntentBits,
-    EmbedBuilder
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require("discord.js");
 
 
@@ -29,8 +32,10 @@ const {
 
 
 
+
+
 // =============================
-// BANCO DE DADOS
+// BANCO
 // =============================
 
 
@@ -44,15 +49,15 @@ db.prepare(`
 
 CREATE TABLE IF NOT EXISTS players (
 
-    steamid TEXT PRIMARY KEY,
+steamid TEXT PRIMARY KEY,
 
-    name TEXT,
+name TEXT,
 
-    first_seen INTEGER,
+first_seen INTEGER,
 
-    last_seen INTEGER,
+last_seen INTEGER,
 
-    times_seen INTEGER DEFAULT 1
+times_seen INTEGER DEFAULT 1
 
 )
 
@@ -65,25 +70,27 @@ db.prepare(`
 
 CREATE TABLE IF NOT EXISTS punishments (
 
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    steamid TEXT,
+steamid TEXT,
 
-    name TEXT,
+name TEXT,
 
-    type TEXT,
+type TEXT,
 
-    reason TEXT,
+reason TEXT,
 
-    admin TEXT,
+admin TEXT,
 
-    created INTEGER,
+created INTEGER,
 
-    expires INTEGER
+expires INTEGER
 
 )
 
 `).run();
+
+
 
 
 
@@ -105,9 +112,11 @@ const client = new Client({
 
 
 
+
 let statusMessage;
 
-let panelMessage;
+let adminPanelMessage;
+
 
 
 
@@ -124,9 +133,6 @@ let panelMessage;
 async function savePlayers(){
 
 
-try{
-
-
 const players =
 await getPlayers();
 
@@ -135,19 +141,22 @@ await getPlayers();
 for(const player of players){
 
 
-const exists =
+
+const old =
 db.prepare(
 
 "SELECT * FROM players WHERE steamid=?"
 
 )
+
 .get(player.SteamID);
 
 
 
 
 
-if(exists){
+
+if(old){
 
 
 db.prepare(`
@@ -162,7 +171,9 @@ times_seen=times_seen+1
 
 WHERE steamid=?
 
-`).run(
+`)
+
+.run(
 
 player.DisplayName,
 
@@ -193,9 +204,13 @@ last_seen
 
 )
 
-VALUES (?,?,?,?)
+VALUES
 
-`).run(
+(?,?,?,?)
+
+`)
+
+.run(
 
 player.SteamID,
 
@@ -212,8 +227,182 @@ Date.now()
 }
 
 
+}
+
+
 
 }
+
+
+
+
+
+
+
+
+
+// =============================
+// PAINEL ADMIN
+// =============================
+
+
+async function updateAdminPanel(){
+
+
+try{
+
+
+const channel =
+
+await client.channels.fetch(
+
+process.env.ADMIN_CHANNEL_ID
+
+);
+
+
+
+const players =
+
+await getPlayers();
+
+
+
+
+
+let texto = "";
+
+
+
+
+
+if(!players.length){
+
+
+texto =
+
+"🟡 Nenhum jogador online.";
+
+
+}else{
+
+
+
+players.forEach((p,i)=>{
+
+
+texto +=
+
+`
+
+${i+1}️⃣ **${p.DisplayName}**
+
+🆔 ${p.SteamID}
+
+❤️ ${Math.round(p.Health)}
+
+📶 ${p.Ping}ms
+
+
+`;
+
+});
+
+
+}
+
+
+
+
+
+
+const embed =
+
+new EmbedBuilder()
+
+.setTitle(
+
+"🛡️ PAINEL ADMINISTRAÇÃO"
+
+)
+
+.setDescription(texto)
+
+.setColor("Blue")
+
+.setFooter({
+
+text:
+
+`Atualizado: ${new Date().toLocaleString("pt-BR")}`
+
+});
+
+
+
+
+
+
+const botoes = new ActionRowBuilder()
+
+.addComponents(
+
+
+new ButtonBuilder()
+
+.setCustomId("refresh_panel")
+
+.setLabel("🔄 Atualizar")
+
+.setStyle(ButtonStyle.Primary),
+
+
+
+new ButtonBuilder()
+
+.setCustomId("admin_info")
+
+.setLabel("📋 Status")
+
+.setStyle(ButtonStyle.Secondary)
+
+
+);
+
+
+if(adminPanelMessage){
+
+
+await adminPanelMessage.edit({
+
+embeds:[embed],
+
+components:[botoes]
+
+});
+
+
+}else{
+
+
+adminPanelMessage =
+
+await channel.send({
+
+embeds:[embed],
+
+components:[botoes]
+
+});
+
+
+}
+
+
+
+console.log(
+"✅ Painel ADM atualizado"
+);
 
 
 
@@ -221,8 +410,11 @@ Date.now()
 
 
 console.log(
-"❌ Erro salvar players:",
+
+"❌ Erro painel ADM:",
+
 error.message
+
 );
 
 
@@ -241,7 +433,7 @@ error.message
 
 
 // =============================
-// STATUS DO SERVIDOR
+// STATUS SERVIDOR
 // =============================
 
 
@@ -252,6 +444,7 @@ try{
 
 
 const channel =
+
 await client.channels.fetch(
 
 process.env.CHANNEL_ID
@@ -261,33 +454,38 @@ process.env.CHANNEL_ID
 
 
 const rust =
+
 await getServerInfo();
 
 
 
+
+
 const players =
+
 rust.Players ?? 0;
 
 
 
 const max =
+
 rust.MaxPlayers ?? 125;
 
 
 
 
+
 const embed =
+
 new EmbedBuilder()
 
-
 .setTitle(
+
 "🟢 SERVIDOR ONLINE"
+
 )
 
-
-.setDescription(
-
-`
+.setDescription(`
 
 🎮 **${process.env.SERVER_NAME}**
 
@@ -306,10 +504,7 @@ new EmbedBuilder()
 
 🔄 Atualizado: <t:${Math.floor(Date.now()/1000)}:R>
 
-`
-
-)
-
+`)
 
 .setColor("Green");
 
@@ -341,6 +536,7 @@ embeds:[embed]
 
 
 statusMessage =
+
 await channel.send({
 
 embeds:[embed]
@@ -349,12 +545,6 @@ embeds:[embed]
 
 
 }
-
-
-
-console.log(
-"✅ Status atualizado"
-);
 
 
 
@@ -373,8 +563,9 @@ error.message
 }
 
 
-
 }
+
+
 
 
 
@@ -393,7 +584,7 @@ client.once(
 
 "clientReady",
 
-()=>{
+async()=>{
 
 
 console.log(
@@ -406,9 +597,11 @@ console.log(
 
 updateStatus();
 
-
+updateAdminPanel();
 
 savePlayers();
+
+
 
 
 
@@ -417,6 +610,16 @@ setInterval(
 updateStatus,
 
 60000
+
+);
+
+
+
+setInterval(
+
+updateAdminPanel,
+
+30000
 
 );
 
@@ -443,7 +646,7 @@ savePlayers,
 
 
 // =============================
-// INTERAÇÕES
+// BOTÕES
 // =============================
 
 
@@ -457,6 +660,59 @@ async interaction=>{
 try{
 
 
+
+if(interaction.isButton()){
+
+
+if(interaction.customId==="refresh_panel"){
+
+
+await updateAdminPanel();
+
+
+
+return interaction.reply({
+
+content:"✅ Painel atualizado.",
+
+ephemeral:true
+
+});
+
+
+}
+
+
+
+if(interaction.customId==="admin_info"){
+
+
+
+const rust =
+await getServerInfo();
+
+
+
+return interaction.reply({
+
+content:
+
+`🟢 Servidor online\n👥 ${rust.Players}/${rust.MaxPlayers}`,
+
+ephemeral:true
+
+});
+
+
+}
+
+
+}
+
+
+
+
+
 if(interaction.isChatInputCommand()){
 
 
@@ -467,6 +723,7 @@ await execute(interaction);
 
 
 
+
 if(interaction.isStringSelectMenu()){
 
 
@@ -474,6 +731,7 @@ await handleSelect(interaction);
 
 
 }
+
 
 
 
@@ -518,8 +776,8 @@ ephemeral:true
 }
 
 
-
 });
+
 
 
 
