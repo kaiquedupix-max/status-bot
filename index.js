@@ -1,50 +1,34 @@
 require("dotenv").config();
 
-
+const fs = require("fs");
 
 const {
-
     Client,
     GatewayIntentBits,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
-
+    EmbedBuilder
 } = require("discord.js");
 
 
-
 const {
-
     execute,
     handleSelect,
     handleModal,
     handleButton,
     setClient
-
 } = require("./commands");
 
 
-
 const {
-
     getServerInfo,
     getPlayers
-
 } = require("./rcon");
-
-
-
 
 
 
 const client = new Client({
 
     intents:[
-
         GatewayIntentBits.Guilds
-
     ]
 
 });
@@ -52,27 +36,52 @@ const client = new Client({
 
 
 
+const STATUS_FILE = "./status-message.json";
 
-
-
-let statusMessage;
-
-let adminPanelMessage;
-
+const ADMIN_FILE = "./admin-panel.json";
 
 
 
 
 
+function salvarArquivo(path,data){
+
+    fs.writeFileSync(
+        path,
+        JSON.stringify(data,null,2)
+    );
+
+}
 
 
 
-// ===============================
-// STATUS SERVIDOR
-// ===============================
 
 
-async function updateStatus(){
+function lerArquivo(path){
+
+    try{
+
+        return JSON.parse(
+            fs.readFileSync(path)
+        );
+
+    }catch{
+
+        return null;
+
+    }
+
+}
+
+
+
+
+
+
+
+
+
+async function atualizarStatus(){
 
 
 try{
@@ -86,30 +95,22 @@ process.env.CHANNEL_ID
 
 
 
-
-
 const rust = await getServerInfo();
 
 
-
-const players =
-
-rust.Players ?? 0;
+const players = await getPlayers();
 
 
-
-const maxPlayers =
-
-rust.MaxPlayers ?? 125;
+const online = players.length;
 
 
+const max = rust.MaxPlayers || 125;
 
 
 
 
 
 const embed = new EmbedBuilder()
-
 
 .setTitle(
 
@@ -122,13 +123,12 @@ const embed = new EmbedBuilder()
 
 ━━━━━━━━━━━━━━
 
-
 🎮 **Servidor Online**
 
 
 👥 **Jogadores**
 
-${players}/${maxPlayers} jogadores online
+**${online}/${max} jogadores online**
 
 
 🗺️ **Mapa**
@@ -156,11 +156,7 @@ ${process.env.GAME_IP}
 `)
 
 
-.setColor(
-
-"Green"
-
-);
+.setColor("Green");
 
 
 
@@ -168,7 +164,7 @@ ${process.env.GAME_IP}
 
 client.user.setActivity(
 
-`🎮 Guerra Fria 2X | 👥 ${players}/${maxPlayers} online`
+`🎮 Guerra Fria 2X | 👥 ${online}/${max} online`
 
 );
 
@@ -176,27 +172,92 @@ client.user.setActivity(
 
 
 
-if(statusMessage){
+let data = lerArquivo(
+
+STATUS_FILE
+
+);
 
 
-await statusMessage.edit({
+
+if(data?.messageId){
+
+
+
+try{
+
+
+const msg = await channel.messages.fetch(
+
+data.messageId
+
+);
+
+
+
+await msg.edit({
 
 embeds:[embed]
 
 });
 
 
-}else{
+return;
 
 
-statusMessage = await channel.send({
 
-embeds:[embed]
+}catch{
 
-});
+
+
+console.log(
+"Mensagem antiga não encontrada, criando nova."
+);
 
 
 }
+
+
+
+}
+
+
+
+
+
+
+const nova = await channel.send({
+
+embeds:[embed]
+
+});
+
+
+
+
+
+salvarArquivo(
+
+STATUS_FILE,
+
+{
+
+messageId:nova.id
+
+}
+
+);
+
+
+
+
+
+console.log(
+
+"✅ Status atualizado"
+
+);
+
 
 
 
@@ -205,7 +266,7 @@ embeds:[embed]
 
 console.log(
 
-"Erro status:",
+"❌ Erro status:",
 
 error.message
 
@@ -226,12 +287,7 @@ error.message
 
 
 
-// ===============================
-// PAINEL ADMIN
-// ===============================
-
-
-async function updateAdminPanel(){
+async function atualizarPainelAdmin(){
 
 
 try{
@@ -245,8 +301,6 @@ process.env.ADMIN_CHANNEL_ID
 
 
 
-
-
 const players = await getPlayers();
 
 
@@ -255,13 +309,11 @@ const players = await getPlayers();
 
 const embed = new EmbedBuilder()
 
-
 .setTitle(
 
-"🛡️ CENTRAL ADMINISTRATIVA"
+"🛡️ Painel Administrativo"
 
 )
-
 
 .setDescription(
 
@@ -269,7 +321,9 @@ players.length
 
 ?
 
-players.map(p=>`
+players.map(p=>
+
+`
 
 👤 **${p.DisplayName}**
 
@@ -279,7 +333,9 @@ players.map(p=>`
 
 ❤️ Vida: ${Math.round(p.Health)}
 
-`).join("\n")
+`
+
+).join("\n")
 
 :
 
@@ -288,18 +344,12 @@ players.map(p=>`
 )
 
 
-.setColor(
-
-"Blue"
-
-)
+.setColor("Blue")
 
 
 .setFooter({
 
-text:
-
-`Online: ${players.length}`
+text:`Players online: ${players.length}`
 
 });
 
@@ -307,79 +357,76 @@ text:
 
 
 
-const buttons=[];
 
+let data = lerArquivo(
 
-
-
-
-players.slice(0,25).forEach(player=>{
-
-
-buttons.push(
-
-new ActionRowBuilder()
-
-.addComponents(
-
-new ButtonBuilder()
-
-.setCustomId(
-
-`actions_${player.SteamID}`
-
-)
-
-.setLabel(
-
-`⚙️ ${player.DisplayName}`
-
-.substring(0,80)
-
-)
-
-.setStyle(
-
-ButtonStyle.Secondary
-
-)
-
-)
+ADMIN_FILE
 
 );
 
 
-});
+
+if(data?.messageId){
 
 
 
+try{
 
 
-if(adminPanelMessage){
+const msg = await channel.messages.fetch(
+
+data.messageId
+
+);
 
 
-await adminPanelMessage.edit({
 
-embeds:[embed],
+await msg.edit({
 
-components:buttons
-
-});
-
-
-}else{
-
-
-adminPanelMessage = await channel.send({
-
-embeds:[embed],
-
-components:buttons
+embeds:[embed]
 
 });
+
+
+
+return;
+
+
+
+}catch{}
+
 
 
 }
+
+
+
+
+
+
+const nova = await channel.send({
+
+embeds:[embed]
+
+});
+
+
+
+
+
+salvarArquivo(
+
+ADMIN_FILE,
+
+{
+
+messageId:nova.id
+
+}
+
+);
+
+
 
 
 
@@ -388,7 +435,7 @@ components:buttons
 
 console.log(
 
-"Erro painel:",
+"❌ Erro painel admin:",
 
 error.message
 
@@ -418,10 +465,9 @@ client.once(
 
 console.log(
 
-`🤖 Online: ${client.user.tag}`
+`🤖 Bot conectado: ${client.user.tag}`
 
 );
-
 
 
 
@@ -429,15 +475,18 @@ setClient(client);
 
 
 
-updateStatus();
+atualizarStatus();
 
-updateAdminPanel();
+
+atualizarPainelAdmin();
+
+
 
 
 
 setInterval(
 
-updateStatus,
+atualizarStatus,
 
 60000
 
@@ -447,7 +496,7 @@ updateStatus,
 
 setInterval(
 
-updateAdminPanel,
+atualizarPainelAdmin,
 
 30000
 
@@ -465,11 +514,6 @@ updateAdminPanel,
 
 
 
-// ===============================
-// INTERAÇÕES
-// ===============================
-
-
 client.on(
 
 "interactionCreate",
@@ -480,147 +524,33 @@ async interaction=>{
 try{
 
 
-
 if(interaction.isChatInputCommand()){
-
 
 return execute(interaction);
 
-
 }
-
-
-
 
 
 
 if(interaction.isStringSelectMenu()){
 
-
 return handleSelect(interaction);
 
-
 }
-
-
 
 
 
 if(interaction.isModalSubmit()){
 
-
 return handleModal(interaction);
 
-
 }
-
-
 
 
 
 if(interaction.isButton()){
 
-
-
-if(
-
-interaction.customId.startsWith(
-
-"actions_"
-
-)
-
-){
-
-
-
-const steamid =
-
-interaction.customId.replace(
-
-"actions_",
-
-""
-
-);
-
-
-
-
-
-const row = new ActionRowBuilder()
-
-.addComponents(
-
-
-new ButtonBuilder()
-
-.setCustomId(
-
-`ban_${steamid}`
-
-)
-
-.setLabel(
-
-"🔨 Banir"
-
-)
-
-.setStyle(
-
-ButtonStyle.Danger
-
-),
-
-
-
-new ButtonBuilder()
-
-.setCustomId(
-
-`kick_${steamid}`
-
-)
-
-.setLabel(
-
-"👢 Kickar"
-
-)
-
-.setStyle(
-
-ButtonStyle.Primary
-
-)
-
-
-);
-
-
-
-
-
-return interaction.reply({
-
-content:
-
-`⚙️ Ações do jogador\n🆔 ${steamid}`,
-
-components:[row],
-
-ephemeral:true
-
-});
-
-
-}
-
-
-
 return handleButton(interaction);
-
 
 }
 
@@ -641,8 +571,7 @@ error
 
 if(!interaction.replied){
 
-
-interaction.reply({
+await interaction.reply({
 
 content:"❌ Erro interno.",
 
@@ -650,7 +579,6 @@ ephemeral:true
 
 });
 
-
 }
 
 
@@ -660,7 +588,6 @@ ephemeral:true
 
 
 });
-
 
 
 
