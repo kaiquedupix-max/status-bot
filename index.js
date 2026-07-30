@@ -128,7 +128,7 @@ const embed = new EmbedBuilder()
 
 👥 **Jogadores**
 
-**${online}/${max} jogadores online**
+**${online}/${max} jogadores**
 
 
 🗺️ **Mapa**
