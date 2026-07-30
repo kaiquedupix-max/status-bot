@@ -1,16 +1,31 @@
 const WebSocket = require("ws");
 
-
 let identifier = 0;
+
+
+function debugLog(...args){
+
+    if(process.env.DEBUG_RCON === "true"){
+
+        console.log(...args);
+
+    }
+
+}
+
+
 
 
 
 function rconCommand(command){
 
-    return new Promise((resolve, reject)=>{
+    return new Promise((resolve,reject)=>{
 
 
-        console.log("📡 RCON ENVIANDO:", command);
+        debugLog(
+            "📡 RCON ENVIANDO:",
+            command
+        );
 
 
 
@@ -39,10 +54,13 @@ function rconCommand(command){
 
 
 
+
         ws.on("open",()=>{
 
 
-            console.log("✅ RCON CONECTADO");
+            debugLog(
+                "✅ RCON CONECTADO"
+            );
 
 
 
@@ -88,22 +106,32 @@ function rconCommand(command){
 
 
 
-                console.log(
+                debugLog(
+
                     "📥 RCON RESPOSTA:",
+
                     response.Message
+
                 );
 
 
 
-                resolve(response.Message);
+                resolve(
+
+                    response.Message
+
+                );
 
 
 
             }catch(error){
 
 
+
                 resolve(
+
                     data.toString()
+
                 );
 
 
@@ -131,8 +159,11 @@ function rconCommand(command){
 
 
             console.log(
-                "❌ RCON ERRO:",
+
+                "❌ Erro RCON:",
+
                 error.message
+
             );
 
 
@@ -152,8 +183,10 @@ function rconCommand(command){
         ws.on("close",()=>{
 
 
-            console.log(
+            debugLog(
+
                 "🔌 RCON DESCONECTADO"
+
             );
 
 
@@ -174,9 +207,9 @@ function rconCommand(command){
 
 
 
-// ============================
-// PLAYERS ONLINE
-// ============================
+// ==========================
+// LISTAR PLAYERS
+// ==========================
 
 
 async function getPlayers(){
@@ -201,8 +234,11 @@ async function getPlayers(){
 
 
         console.log(
-            "Erro playerlist:",
+
+            "❌ Erro playerlist:",
+
             error.message
+
         );
 
 
@@ -222,9 +258,9 @@ async function getPlayers(){
 
 
 
-// ============================
-// SERVER INFO
-// ============================
+// ==========================
+// INFO SERVIDOR
+// ==========================
 
 
 async function getServerInfo(){
@@ -249,8 +285,11 @@ async function getServerInfo(){
 
 
         console.log(
-            "Erro serverinfo:",
+
+            "❌ Erro serverinfo:",
+
             error.message
+
         );
 
 
@@ -280,9 +319,9 @@ async function getServerInfo(){
 
 
 
-// ============================
+// ==========================
 // BAN PERMANENTE
-// ============================
+// ==========================
 
 
 async function banPlayer(
@@ -325,9 +364,9 @@ async function banPlayer(
 
 
 
-// ============================
-// BAN TEMPORARIO
-// ============================
+// ==========================
+// BAN TEMPORÁRIO
+// ==========================
 
 
 async function tempBanPlayer(
@@ -372,9 +411,9 @@ async function tempBanPlayer(
 
 
 
-// ============================
+// ==========================
 // KICK
-// ============================
+// ==========================
 
 
 async function kickPlayer(
@@ -415,9 +454,9 @@ async function kickPlayer(
 
 
 
-// ============================
+// ==========================
 // UNBAN
-// ============================
+// ==========================
 
 
 async function unbanPlayer(
