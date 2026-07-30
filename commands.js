@@ -1,4 +1,5 @@
 const {
+
     SlashCommandBuilder,
     EmbedBuilder,
     ActionRowBuilder,
@@ -6,25 +7,240 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle
+
 } = require("discord.js");
 
 
+
+const Database = require("better-sqlite3");
+
+
+
 const {
+
     getPlayers,
     banPlayer,
     kickPlayer,
     unbanPlayer
+
 } = require("./rcon");
+
+
+
+
+
+
+
+const db = new Database(
+
+"database.sqlite"
+
+);
+
+
+
+
 
 
 
 function isAdmin(interaction){
 
-    return interaction.member.roles.cache.has(
-        process.env.ADMIN_ROLE_ID
-    );
+
+return interaction.member.roles.cache.has(
+
+process.env.ADMIN_ROLE_ID
+
+);
+
 
 }
+
+
+
+
+
+
+
+
+
+function savePunishment(data){
+
+
+db.prepare(`
+
+INSERT INTO punishments
+
+(
+
+steamid,
+
+name,
+
+type,
+
+reason,
+
+admin,
+
+created
+
+)
+
+VALUES (?,?,?,?,?,?)
+
+`)
+
+.run(
+
+data.steamid,
+
+data.name,
+
+data.type,
+
+data.reason,
+
+data.admin,
+
+Date.now()
+
+);
+
+
+}
+
+
+
+
+
+
+
+
+
+
+async function sendBanLog(data){
+
+
+try{
+
+
+const channel =
+
+await interactionClient.channels.fetch(
+
+process.env.BAN_LOG_CHANNEL_ID
+
+);
+
+
+
+
+
+const embed =
+
+new EmbedBuilder()
+
+.setTitle(
+
+"🚨 NOVA PUNIÇÃO"
+
+)
+
+.setDescription(`
+
+🔨 **${data.type}**
+
+
+👤 **Jogador:**
+
+${data.name}
+
+
+🆔 **SteamID:**
+
+${data.steamid}
+
+
+📝 **Motivo:**
+
+${data.reason}
+
+
+👮 **Administrador:**
+
+${data.admin}
+
+
+📅 <t:${Math.floor(Date.now()/1000)}:F>
+
+
+🌐 ${process.env.SERVER_NAME}
+
+`)
+
+.setColor(
+
+data.type==="BAN"
+
+?
+
+"Red"
+
+:
+
+"Orange"
+
+);
+
+
+
+
+
+await channel.send({
+
+embeds:[embed]
+
+});
+
+
+
+}catch(e){
+
+
+console.log(
+
+"Erro log:",
+e.message
+
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+let interactionClient;
+
+
+
+
+
+function setClient(client){
+
+interactionClient = client;
+
+}
+
+
+
 
 
 
@@ -43,11 +259,12 @@ new SlashCommandBuilder()
 
 
 
+
 new SlashCommandBuilder()
 
 .setName("buscar-player")
 
-.setDescription("Busca jogador pelo SteamID")
+.setDescription("Busca jogador")
 
 .addStringOption(option=>
 
@@ -55,11 +272,12 @@ option
 
 .setName("steamid")
 
-.setDescription("SteamID do jogador")
+.setDescription("SteamID")
 
 .setRequired(true)
 
 ),
+
 
 
 
@@ -85,12 +303,11 @@ new SlashCommandBuilder()
 
 
 
-
 new SlashCommandBuilder()
 
 .setName("desbanir")
 
-.setDescription("Remove ban pelo SteamID")
+.setDescription("Remove ban")
 
 .addStringOption(option=>
 
@@ -104,67 +321,47 @@ option
 
 )
 
+
 ];
 
 
-
-
-
-
-
-
-
 async function execute(interaction){
-
 
 
 if(interaction.commandName==="listar-player"){
 
 
 const players =
+
 await getPlayers();
 
 
 
-if(!players.length){
-
-return interaction.reply({
-
-content:"❌ Nenhum jogador online.",
-
-ephemeral:true
-
-});
-
-}
-
-
-
-const lista = players.map((p,i)=>
-
-
-`**${i+1}. ${p.DisplayName}**\n🆔 ${p.SteamID}`
-
-
-).join("\n\n");
-
-
-
-
 const embed =
+
 new EmbedBuilder()
 
 .setTitle("📋 PLAYERS ONLINE")
 
-.setDescription(lista)
+.setDescription(
 
-.setColor("Green")
+players.length
 
-.setFooter({
+?
 
-text:`Total: ${players.length} jogadores`
+players.map((p,i)=>
 
-});
+`${i+1}. **${p.DisplayName}**\n🆔 ${p.SteamID}`
+
+).join("\n\n")
+
+:
+
+"❌ Nenhum jogador online."
+
+)
+
+.setColor("Green");
 
 
 
@@ -174,12 +371,82 @@ embeds:[embed]
 
 });
 
+}
+
+
+
+if(interaction.commandName==="banir"){
+
+
+if(!isAdmin(interaction))
+
+return interaction.reply({
+
+content:"❌ Sem permissão.",
+
+ephemeral:true
+
+});
+
+
+
+return abrirSelecao(interaction,"ban");
+
 
 }
 
 
 
 
+if(interaction.commandName==="kickar"){
+
+
+if(!isAdmin(interaction))
+
+return interaction.reply({
+
+content:"❌ Sem permissão.",
+
+ephemeral:true
+
+});
+
+
+
+return abrirSelecao(interaction,"kick");
+
+
+}
+
+
+
+
+
+if(interaction.commandName==="desbanir"){
+
+
+const id =
+
+interaction.options.getString("steamid");
+
+
+
+const resposta =
+
+await unbanPlayer(id);
+
+
+
+return interaction.reply({
+
+content:
+
+`✅ Ban removido\n${resposta}`
+
+});
+
+
+}
 
 
 
@@ -189,193 +456,24 @@ if(interaction.commandName==="buscar-player"){
 
 
 const id =
+
 interaction.options.getString("steamid");
 
 
 
 const players =
+
 await getPlayers();
 
 
 
-const player =
+const p =
+
 players.find(
 
-p=>p.SteamID===id
+x=>x.SteamID===id
 
 );
-
-
-
-if(!player){
-
-
-return interaction.reply({
-
-content:"❌ Player não está online.",
-
-ephemeral:true
-
-});
-
-
-}
-
-
-
-
-const embed =
-new EmbedBuilder()
-
-.setTitle("🔎 PLAYER")
-
-.setDescription(`
-
-👤 **${player.DisplayName}**
-
-🆔 ${player.SteamID}
-
-❤️ Vida: ${Math.round(player.Health)}
-
-📶 Ping: ${player.Ping}
-
-👥 Team: ${player.TeamID}
-
-
-📍 X: ${player.Position.x}
-
-Y: ${player.Position.y}
-
-Z: ${player.Position.z}
-
-`)
-
-.setColor("Blue");
-
-
-
-
-return interaction.reply({
-
-embeds:[embed]
-
-});
-
-
-
-}
-
-
-
-
-
-
-
-
-
-if(
-
-interaction.commandName==="banir"
-
-){
-
-
-
-if(!isAdmin(interaction))
-
-return interaction.reply({
-
-content:"❌ Sem permissão.",
-
-ephemeral:true
-
-});
-
-
-
-return abrirSelecao(
-
-interaction,
-
-"ban"
-
-);
-
-
-}
-
-
-
-
-
-
-
-
-if(
-
-interaction.commandName==="kickar"
-
-){
-
-
-
-if(!isAdmin(interaction))
-
-return interaction.reply({
-
-content:"❌ Sem permissão.",
-
-ephemeral:true
-
-});
-
-
-
-return abrirSelecao(
-
-interaction,
-
-"kick"
-
-);
-
-
-}
-
-
-
-
-
-
-
-
-if(
-
-interaction.commandName==="desbanir"
-
-){
-
-
-
-if(!isAdmin(interaction))
-
-return interaction.reply({
-
-content:"❌ Sem permissão.",
-
-ephemeral:true
-
-});
-
-
-
-const id =
-interaction.options.getString("steamid");
-
-
-
-const resposta =
-await unbanPlayer(id);
 
 
 
@@ -383,7 +481,15 @@ return interaction.reply({
 
 content:
 
-`✅ Ban removido\n🆔 ${id}\n📡 ${resposta}`
+p
+
+?
+
+`👤 ${p.DisplayName}\n🆔 ${p.SteamID}`
+
+:
+
+"❌ Não encontrado."
 
 });
 
@@ -392,6 +498,7 @@ content:
 
 
 }
+
 
 
 
@@ -404,27 +511,9 @@ content:
 async function abrirSelecao(interaction,tipo){
 
 
-
 const players =
+
 await getPlayers();
-
-
-
-if(!players.length){
-
-
-return interaction.reply({
-
-content:"❌ Nenhum player online.",
-
-ephemeral:true
-
-});
-
-
-}
-
-
 
 
 
@@ -446,25 +535,17 @@ new StringSelectMenuBuilder()
 
 .addOptions(
 
-
 players.slice(0,25)
 
 .map(p=>({
 
-
 label:p.DisplayName.substring(0,100),
-
 
 description:p.SteamID,
 
-
-// CORREÇÃO DO STEAMID
-
 value:`${tipo}_${p.SteamID}`
 
-
 }))
-
 
 );
 
@@ -472,34 +553,19 @@ value:`${tipo}_${p.SteamID}`
 
 
 
-
 return interaction.reply({
-
 
 content:
 
-tipo==="ban"
-
-?
-
-"🔨 Escolha quem será banido:"
-
-:
-
-"👢 Escolha quem será kickado:",
-
-
+"Selecione o jogador:",
 
 components:[
-
 
 new ActionRowBuilder()
 
 .addComponents(menu)
 
-
 ]
-
 
 });
 
@@ -519,7 +585,7 @@ async function handleSelect(interaction){
 
 
 
-const [tipo,steam] =
+const [tipo,steamid] =
 
 interaction.values[0].split("_");
 
@@ -533,7 +599,7 @@ new ModalBuilder()
 
 .setCustomId(
 
-`${tipo}_${steam}`
+`${tipo}_${steamid}`
 
 )
 
@@ -561,7 +627,7 @@ new TextInputBuilder()
 
 .setCustomId("motivo")
 
-.setLabel("Digite o motivo")
+.setLabel("Motivo")
 
 .setStyle(
 
@@ -585,10 +651,104 @@ new ActionRowBuilder()
 
 
 
+await interaction.showModal(modal);
+
+
+}
+
+
+
+
+
+
+
+
+
+async function handleButton(interaction){
+
+
+
+const [action,steamid] =
+
+interaction.customId.split("_");
+
+
+
+
+
+if(
+
+action!=="ban" &&
+
+action!=="kick"
+
+)
+
+return;
+
+
+
+
+
+const modal =
+
+new ModalBuilder()
+
+.setCustomId(
+
+`${action}_${steamid}`
+
+)
+
+.setTitle(
+
+action==="ban"
+
+?
+
+"Motivo do Ban"
+
+:
+
+"Motivo do Kick"
+
+);
+
+
+
+
+
+const input =
+
+new TextInputBuilder()
+
+.setCustomId("motivo")
+
+.setLabel("Motivo")
+
+.setStyle(
+
+TextInputStyle.Paragraph
+
+)
+
+.setRequired(true);
+
+
+
+
+
+modal.addComponents(
+
+new ActionRowBuilder()
+
+.addComponents(input)
+
+);
+
 
 
 await interaction.showModal(modal);
-
 
 
 }
@@ -605,7 +765,7 @@ async function handleModal(interaction){
 
 
 
-const [tipo,steam] =
+const [tipo,steamid] =
 
 interaction.customId.split("_");
 
@@ -624,23 +784,24 @@ interaction.fields.getTextInputValue(
 
 
 const players =
+
 await getPlayers();
 
 
 
 const player =
+
 players.find(
 
-p=>p.SteamID===steam
+p=>p.SteamID===steamid
 
 );
 
 
 
 const nome =
-player?.DisplayName || steam;
 
-
+player?.DisplayName || steamid;
 
 
 
@@ -650,15 +811,14 @@ let resposta;
 
 
 
-
-
 if(tipo==="ban"){
 
 
 resposta =
+
 await banPlayer(
 
-steam,
+steamid,
 
 motivo
 
@@ -666,8 +826,6 @@ motivo
 
 
 }
-
-
 
 
 
@@ -675,9 +833,10 @@ if(tipo==="kick"){
 
 
 resposta =
+
 await kickPlayer(
 
-steam,
+steamid,
 
 motivo
 
@@ -685,6 +844,50 @@ motivo
 
 
 }
+
+
+
+
+
+savePunishment({
+
+steamid,
+
+name:nome,
+
+type:tipo.toUpperCase(),
+
+reason:motivo,
+
+admin:interaction.user.tag
+
+});
+
+
+
+
+
+
+if(interactionClient){
+
+
+await sendBanLog({
+
+steamid,
+
+name:nome,
+
+type:tipo.toUpperCase(),
+
+reason:motivo,
+
+admin:interaction.user.tag
+
+});
+
+
+}
+
 
 
 
@@ -693,7 +896,6 @@ motivo
 return interaction.reply({
 
 embeds:[
-
 
 new EmbedBuilder()
 
@@ -711,22 +913,19 @@ tipo==="ban"
 
 )
 
-
 .setDescription(`
 
-👤 **${nome}**
+👤 ${nome}
 
-🆔 ${steam}
+🆔 ${steamid}
 
 📝 ${motivo}
 
 👮 ${interaction.user}
 
-
 📡 ${resposta}
 
 `)
-
 
 .setColor(
 
@@ -755,6 +954,7 @@ tipo==="ban"
 
 
 
+
 module.exports = {
 
 
@@ -764,6 +964,10 @@ execute,
 
 handleSelect,
 
-handleModal
+handleModal,
+
+handleButton,
+
+setClient
 
 };
