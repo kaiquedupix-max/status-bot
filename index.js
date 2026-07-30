@@ -32,10 +32,8 @@ const {
 
 
 
-
-
 // =============================
-// BANCO
+// DATABASE
 // =============================
 
 
@@ -66,6 +64,7 @@ times_seen INTEGER DEFAULT 1
 
 
 
+
 db.prepare(`
 
 CREATE TABLE IF NOT EXISTS punishments (
@@ -89,8 +88,6 @@ expires INTEGER
 )
 
 `).run();
-
-
 
 
 
@@ -126,11 +123,14 @@ let adminPanelMessage;
 
 
 // =============================
-// SALVAR PLAYERS
+// SALVAR JOGADORES
 // =============================
 
 
 async function savePlayers(){
+
+
+try{
 
 
 const players =
@@ -141,8 +141,8 @@ await getPlayers();
 for(const player of players){
 
 
-
 const old =
+
 db.prepare(
 
 "SELECT * FROM players WHERE steamid=?"
@@ -185,6 +185,7 @@ player.SteamID
 
 
 
+
 }else{
 
 
@@ -223,12 +224,27 @@ Date.now()
 );
 
 
+}
+
+
 
 }
 
 
-}
 
+}catch(error){
+
+
+console.log(
+
+"Erro banco players:",
+
+error.message
+
+);
+
+
+}
 
 
 }
@@ -270,7 +286,13 @@ await getPlayers();
 
 
 
-let texto = "";
+let description = "";
+
+
+
+
+
+const rows = [];
 
 
 
@@ -279,7 +301,7 @@ let texto = "";
 if(!players.length){
 
 
-texto =
+description =
 
 "🟡 Nenhum jogador online.";
 
@@ -288,31 +310,65 @@ texto =
 
 
 
-players.forEach((p,i)=>{
+for(const player of players.slice(0,25)){
 
 
-texto +=
+description +=
 
 `
+👤 **${player.DisplayName}**
 
-${i+1}️⃣ **${p.DisplayName}**
+🆔 ${player.SteamID}
 
-🆔 ${p.SteamID}
+❤️ ${Math.round(player.Health)}
 
-❤️ ${Math.round(p.Health)}
-
-📶 ${p.Ping}ms
-
+📶 ${player.Ping}ms
 
 `;
 
-});
+
+
+const button =
+
+new ButtonBuilder()
+
+.setCustomId(
+
+`actions_${player.SteamID}`
+
+)
+
+.setLabel(
+
+`⚙️ ${player.DisplayName}`
+
+.substring(0,80)
+
+)
+
+.setStyle(
+
+ButtonStyle.Secondary
+
+);
+
+
+
+rows.push(
+
+new ActionRowBuilder()
+
+.addComponents(button)
+
+);
+
 
 
 }
 
 
 
+}
 
 
 
@@ -326,7 +382,7 @@ new EmbedBuilder()
 
 )
 
-.setDescription(texto)
+.setDescription(description)
 
 .setColor("Blue")
 
@@ -334,40 +390,11 @@ new EmbedBuilder()
 
 text:
 
-`Atualizado: ${new Date().toLocaleString("pt-BR")}`
+`Players online: ${players.length}`
 
 });
 
-
-
-
-
-
-const botoes = new ActionRowBuilder()
-
-.addComponents(
-
-
-new ButtonBuilder()
-
-.setCustomId("refresh_panel")
-
-.setLabel("🔄 Atualizar")
-
-.setStyle(ButtonStyle.Primary),
-
-
-
-new ButtonBuilder()
-
-.setCustomId("admin_info")
-
-.setLabel("📋 Status")
-
-.setStyle(ButtonStyle.Secondary)
-
-
-);
+// continua updateAdminPanel
 
 
 if(adminPanelMessage){
@@ -377,7 +404,7 @@ await adminPanelMessage.edit({
 
 embeds:[embed],
 
-components:[botoes]
+components:rows
 
 });
 
@@ -391,7 +418,7 @@ await channel.send({
 
 embeds:[embed],
 
-components:[botoes]
+components:rows
 
 });
 
@@ -401,7 +428,9 @@ components:[botoes]
 
 
 console.log(
+
 "✅ Painel ADM atualizado"
+
 );
 
 
@@ -419,6 +448,186 @@ error.message
 
 
 }
+
+
+}
+
+
+
+
+
+
+
+
+
+// =============================
+// LOG DE BANIMENTOS
+// =============================
+
+
+async function sendBanLog(data){
+
+
+try{
+
+
+const channel =
+
+await client.channels.fetch(
+
+process.env.BAN_LOG_CHANNEL_ID
+
+);
+
+
+
+
+
+const embed =
+
+new EmbedBuilder()
+
+.setTitle(
+
+"🚨 NOVA PUNIÇÃO"
+
+)
+
+.setDescription(`
+
+🔨 **Tipo:** ${data.type}
+
+
+👤 **Jogador:**
+
+${data.name}
+
+
+🆔 **SteamID:**
+
+${data.steamid}
+
+
+📝 **Motivo:**
+
+${data.reason}
+
+
+👮 **Administrador:**
+
+${data.admin}
+
+
+📅 **Data:**
+
+<t:${Math.floor(Date.now()/1000)}:F>
+
+
+🌐 **Servidor:**
+
+${process.env.SERVER_NAME}
+
+`)
+
+.setColor(
+
+data.type==="BAN"
+
+?
+
+"Red"
+
+:
+
+"Orange"
+
+);
+
+
+
+
+
+await channel.send({
+
+embeds:[embed]
+
+});
+
+
+
+}catch(error){
+
+
+console.log(
+
+"Erro log punição:",
+
+error.message
+
+);
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// =============================
+// REGISTRAR PUNIÇÃO BANCO
+// =============================
+
+
+function savePunishment(data){
+
+
+db.prepare(`
+
+INSERT INTO punishments
+
+(
+
+steamid,
+
+name,
+
+type,
+
+reason,
+
+admin,
+
+created
+
+)
+
+VALUES (?,?,?,?,?,?)
+
+`)
+
+.run(
+
+data.steamid,
+
+data.name,
+
+data.type,
+
+data.reason,
+
+data.admin,
+
+Date.now()
+
+);
 
 
 }
@@ -461,20 +670,6 @@ await getServerInfo();
 
 
 
-const players =
-
-rust.Players ?? 0;
-
-
-
-const max =
-
-rust.MaxPlayers ?? 125;
-
-
-
-
-
 const embed =
 
 new EmbedBuilder()
@@ -490,7 +685,7 @@ new EmbedBuilder()
 🎮 **${process.env.SERVER_NAME}**
 
 
-👥 **Players:** ${players}/${max}
+👥 **Players:** ${rust.Players}/${rust.MaxPlayers}
 
 
 🗺️ **Mapa:** ${rust.Map}
@@ -514,7 +709,7 @@ new EmbedBuilder()
 
 client.user.setActivity(
 
-`Guerra Fria 2X | ${players}/${max}`
+`Guerra Fria 2X | ${rust.Players}/${rust.MaxPlayers}`
 
 );
 
@@ -553,7 +748,7 @@ embeds:[embed]
 
 console.log(
 
-"❌ Erro status:",
+"Erro status:",
 
 error.message
 
@@ -565,16 +760,6 @@ error.message
 
 }
 
-
-
-
-
-
-
-
-
-
-
 // =============================
 // BOT ONLINE
 // =============================
@@ -584,7 +769,7 @@ client.once(
 
 "clientReady",
 
-async()=>{
+()=>{
 
 
 console.log(
@@ -646,7 +831,7 @@ savePlayers,
 
 
 // =============================
-// BOTÕES
+// INTERAÇÕES
 // =============================
 
 
@@ -661,35 +846,115 @@ try{
 
 
 
+// BOTÃO AÇÕES DO PLAYER
+
 if(interaction.isButton()){
 
 
-if(interaction.customId==="refresh_panel"){
 
+const id =
 
-await updateAdminPanel();
-
-
-
-return interaction.reply({
-
-content:"✅ Painel atualizado.",
-
-ephemeral:true
-
-});
-
-
-}
+interaction.customId;
 
 
 
-if(interaction.customId==="admin_info"){
+
+
+if(id.startsWith("actions_")){
 
 
 
-const rust =
-await getServerInfo();
+const steamid =
+
+id.replace(
+
+"actions_",
+
+""
+
+);
+
+
+
+
+
+const row =
+
+new ActionRowBuilder()
+
+.addComponents(
+
+
+new ButtonBuilder()
+
+.setCustomId(
+
+`ban_${steamid}`
+
+)
+
+.setLabel(
+
+"🔨 Banir"
+
+)
+
+.setStyle(
+
+ButtonStyle.Danger
+
+),
+
+
+
+new ButtonBuilder()
+
+.setCustomId(
+
+`kick_${steamid}`
+
+)
+
+.setLabel(
+
+"👢 Kickar"
+
+)
+
+.setStyle(
+
+ButtonStyle.Primary
+
+),
+
+
+
+new ButtonBuilder()
+
+.setCustomId(
+
+`info_${steamid}`
+
+)
+
+.setLabel(
+
+"🔎 Info"
+
+)
+
+.setStyle(
+
+ButtonStyle.Secondary
+
+)
+
+
+
+);
+
+
+
 
 
 
@@ -697,7 +962,86 @@ return interaction.reply({
 
 content:
 
-`🟢 Servidor online\n👥 ${rust.Players}/${rust.MaxPlayers}`,
+`⚙️ Ações para SteamID:\n${steamid}`,
+
+components:[row],
+
+ephemeral:true
+
+});
+
+
+
+}
+
+
+
+
+
+
+// INFO PLAYER
+
+
+if(id.startsWith("info_")){
+
+
+const steamid =
+
+id.replace(
+
+"info_",
+
+""
+
+);
+
+
+
+const players =
+
+await getPlayers();
+
+
+
+const player =
+
+players.find(
+
+p=>p.SteamID===steamid
+
+);
+
+
+
+return interaction.reply({
+
+embeds:[
+
+
+new EmbedBuilder()
+
+.setTitle(
+
+"🔎 Informações do jogador"
+
+)
+
+.setDescription(`
+
+👤 ${player?.DisplayName || "Desconhecido"}
+
+🆔 ${steamid}
+
+❤️ Vida: ${player?.Health || 0}
+
+📶 Ping: ${player?.Ping || 0}
+
+`)
+
+.setColor("Blue")
+
+
+],
 
 ephemeral:true
 
@@ -707,10 +1051,97 @@ ephemeral:true
 }
 
 
+
+
+
+
+// BAN PELO BOTÃO
+
+
+if(id.startsWith("ban_")){
+
+
+const steamid =
+
+id.replace(
+
+"ban_",
+
+""
+
+);
+
+
+
+const modal =
+
+require("discord.js").ModalBuilder;
+
+
+
+
+
+return interaction.reply({
+
+content:
+
+`Use o comando /banir para aplicar o motivo ao jogador ${steamid}`,
+
+ephemeral:true
+
+});
+
+
+
 }
 
 
 
+
+
+
+// KICK PELO BOTÃO
+
+
+if(id.startsWith("kick_")){
+
+
+const steamid =
+
+id.replace(
+
+"kick_",
+
+""
+
+);
+
+
+
+return interaction.reply({
+
+content:
+
+`Use o comando /kickar para aplicar o motivo ao jogador ${steamid}`,
+
+ephemeral:true
+
+});
+
+
+}
+
+
+
+}
+
+
+
+
+
+
+
+// SLASH COMMANDS
 
 
 if(interaction.isChatInputCommand()){
@@ -724,6 +1155,11 @@ await execute(interaction);
 
 
 
+
+
+// SELECT MENU
+
+
 if(interaction.isStringSelectMenu()){
 
 
@@ -735,6 +1171,10 @@ await handleSelect(interaction);
 
 
 
+
+// MODAL
+
+
 if(interaction.isModalSubmit()){
 
 
@@ -742,6 +1182,8 @@ await handleModal(interaction);
 
 
 }
+
+
 
 
 
@@ -776,8 +1218,8 @@ ephemeral:true
 }
 
 
-});
 
+});
 
 
 
