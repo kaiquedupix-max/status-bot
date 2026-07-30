@@ -1,10 +1,15 @@
 require("dotenv").config();
 
+
 const {
     Client,
     GatewayIntentBits,
     EmbedBuilder
 } = require("discord.js");
+
+
+const Database = require("better-sqlite3");
+
 
 
 const {
@@ -14,29 +19,231 @@ const {
 } = require("./commands");
 
 
+
 const {
-    getServerInfo
+    getServerInfo,
+    getPlayers
 } = require("./rcon");
+
+
+
+
+
+// =============================
+// BANCO DE DADOS
+// =============================
+
+
+const db = new Database(
+    "database.sqlite"
+);
+
+
+
+db.prepare(`
+
+CREATE TABLE IF NOT EXISTS players (
+
+    steamid TEXT PRIMARY KEY,
+
+    name TEXT,
+
+    first_seen INTEGER,
+
+    last_seen INTEGER,
+
+    times_seen INTEGER DEFAULT 1
+
+)
+
+`).run();
+
+
+
+
+db.prepare(`
+
+CREATE TABLE IF NOT EXISTS punishments (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    steamid TEXT,
+
+    name TEXT,
+
+    type TEXT,
+
+    reason TEXT,
+
+    admin TEXT,
+
+    created INTEGER,
+
+    expires INTEGER
+
+)
+
+`).run();
+
+
+
+
 
 
 
 const client = new Client({
 
     intents:[
+
         GatewayIntentBits.Guilds
+
     ]
 
 });
 
 
 
+
+
 let statusMessage;
 
+let panelMessage;
 
 
-// =====================================
-// ATUALIZAR STATUS
-// =====================================
+
+
+
+
+
+
+// =============================
+// SALVAR PLAYERS
+// =============================
+
+
+async function savePlayers(){
+
+
+try{
+
+
+const players =
+await getPlayers();
+
+
+
+for(const player of players){
+
+
+const exists =
+db.prepare(
+
+"SELECT * FROM players WHERE steamid=?"
+
+)
+.get(player.SteamID);
+
+
+
+
+
+if(exists){
+
+
+db.prepare(`
+
+UPDATE players SET
+
+name=?,
+
+last_seen=?,
+
+times_seen=times_seen+1
+
+WHERE steamid=?
+
+`).run(
+
+player.DisplayName,
+
+Date.now(),
+
+player.SteamID
+
+);
+
+
+
+}else{
+
+
+db.prepare(`
+
+INSERT INTO players
+
+(
+
+steamid,
+
+name,
+
+first_seen,
+
+last_seen
+
+)
+
+VALUES (?,?,?,?)
+
+`).run(
+
+player.SteamID,
+
+player.DisplayName,
+
+Date.now(),
+
+Date.now()
+
+);
+
+
+
+}
+
+
+
+}
+
+
+
+}catch(error){
+
+
+console.log(
+"❌ Erro salvar players:",
+error.message
+);
+
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+
+
+// =============================
+// STATUS DO SERVIDOR
+// =============================
+
 
 async function updateStatus(){
 
@@ -44,13 +251,17 @@ async function updateStatus(){
 try{
 
 
-const channel = await client.channels.fetch(
-    process.env.CHANNEL_ID
+const channel =
+await client.channels.fetch(
+
+process.env.CHANNEL_ID
+
 );
 
 
 
-const rust = await getServerInfo();
+const rust =
+await getServerInfo();
 
 
 
@@ -64,7 +275,9 @@ rust.MaxPlayers ?? 125;
 
 
 
-const embed = new EmbedBuilder()
+
+const embed =
+new EmbedBuilder()
 
 
 .setTitle(
@@ -75,17 +288,24 @@ const embed = new EmbedBuilder()
 .setDescription(
 
 `
+
 🎮 **${process.env.SERVER_NAME}**
+
 
 👥 **Players:** ${players}/${max}
 
+
 🗺️ **Mapa:** ${rust.Map}
+
 
 ⚡ **FPS:** ${Math.round(rust.Framerate)}
 
+
 🌎 **IP:** ${process.env.GAME_IP}
 
+
 🔄 Atualizado: <t:${Math.floor(Date.now()/1000)}:R>
+
 `
 
 )
@@ -99,9 +319,10 @@ const embed = new EmbedBuilder()
 
 client.user.setActivity(
 
-`Guerra Fria 2x | ${players}/${max} jogadores`
+`Guerra Fria 2X | ${players}/${max}`
 
 );
+
 
 
 
@@ -119,7 +340,8 @@ embeds:[embed]
 }else{
 
 
-statusMessage = await channel.send({
+statusMessage =
+await channel.send({
 
 embeds:[embed]
 
@@ -127,7 +349,6 @@ embeds:[embed]
 
 
 }
-
 
 
 
@@ -141,8 +362,11 @@ console.log(
 
 
 console.log(
+
 "❌ Erro status:",
+
 error.message
+
 );
 
 
@@ -157,24 +381,34 @@ error.message
 
 
 
-// =====================================
+
+
+
+// =============================
 // BOT ONLINE
-// =====================================
+// =============================
 
 
 client.once(
+
 "clientReady",
 
 ()=>{
 
 
 console.log(
+
 `🤖 Bot conectado: ${client.user.tag}`
+
 );
 
 
 
 updateStatus();
+
+
+
+savePlayers();
 
 
 
@@ -188,6 +422,16 @@ updateStatus,
 
 
 
+setInterval(
+
+savePlayers,
+
+30000
+
+);
+
+
+
 });
 
 
@@ -196,9 +440,11 @@ updateStatus,
 
 
 
-// =====================================
+
+
+// =============================
 // INTERAÇÕES
-// =====================================
+// =============================
 
 
 client.on(
@@ -211,8 +457,6 @@ async interaction=>{
 try{
 
 
-// Slash Commands
-
 if(interaction.isChatInputCommand()){
 
 
@@ -223,9 +467,6 @@ await execute(interaction);
 
 
 
-
-// Menu jogador
-
 if(interaction.isStringSelectMenu()){
 
 
@@ -235,9 +476,6 @@ await handleSelect(interaction);
 }
 
 
-
-
-// Modal motivo
 
 if(interaction.isModalSubmit()){
 
@@ -252,25 +490,28 @@ await handleModal(interaction);
 }catch(error){
 
 
-
 console.log(
+
 "❌ Erro interação:",
+
 error
+
 );
 
 
 
 if(!interaction.replied){
 
-interaction.reply({
 
-content:
-"❌ Ocorreu um erro.",
+await interaction.reply({
+
+content:"❌ Erro interno.",
 
 ephemeral:true
 
 });
 
+
 }
 
 
@@ -279,6 +520,8 @@ ephemeral:true
 
 
 });
+
+
 
 
 
